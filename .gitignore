@@ -1,0 +1,25 @@
+# Virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Environment variables
+.env
+
+# VS Code
+.vscode/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data
+data/bronze/
+data/silver/
+data/gold/
+data/quarantine/
+
+# OS files
+.DS_Store
+Thumbs.db
