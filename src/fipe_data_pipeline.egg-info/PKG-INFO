@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: fipe-data-pipeline
+Version: 0.1.0
+Summary: Historical and incremental data pipeline for FIPE vehicle pricing data
+Requires-Python: >=3.12
