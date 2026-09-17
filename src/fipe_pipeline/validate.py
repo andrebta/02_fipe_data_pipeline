@@ -40,7 +40,19 @@ class ValidationResult:
     message: str
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {
+            "rule": self.rule,
+            "passed": self.passed,
+            "invalid_rows": self.invalid_rows,
+            "severity": self.severity,
+            "action": self.action,
+            "effective_action": (
+                "NONE"
+                if self.passed
+                else self.action
+            ),
+            "message": self.message,
+        }
 
 
 def validate_required_columns(df: pd.DataFrame) -> ValidationResult:
@@ -370,7 +382,18 @@ def run_validations(df: pd.DataFrame) -> pd.DataFrame:
     # Schema validation must run first. If required columns are missing,
     # downstream rules cannot be evaluated safely.
     if not schema_result.passed:
-        return pd.DataFrame([schema_result.to_dict()])
+        return pd.DataFrame(
+            [schema_result.to_dict()],
+            columns=[
+                "rule",
+                "passed",
+                "invalid_rows",
+                "severity",
+                "action",
+                "effective_action",
+                "message",
+            ],
+        )
 
     results = [
         schema_result,
@@ -388,6 +411,7 @@ def run_validations(df: pd.DataFrame) -> pd.DataFrame:
             "invalid_rows",
             "severity",
             "action",
+            "effective_action",
             "message",
         ],
     )

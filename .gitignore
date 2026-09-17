@@ -5,20 +5,27 @@
 __pycache__/
 *.py[cod]
 
-# Environment variables
-.env
-
-# VS Code
-.vscode/
+# Pytest
+.pytest_cache/
 
 # Jupyter
 .ipynb_checkpoints/
 
-# Data
+# VS Code
+.vscode/
+
+# Data layers
 data/bronze/
 data/silver/
 data/gold/
 data/quarantine/
+
+# Logs
+logs/
+
+# Temporary files
+*.part
+*.tmp
 
 # OS files
 .DS_Store

@@ -1,9 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "fipe-data-pipeline"
 version = "0.1.0"
-description = "Historical and incremental data pipeline for FIPE vehicle pricing data"
-requires-python = ">=3.12"
+description = "Incremental data engineering pipeline for historical FIPE vehicle price data."
+readme = "README.md"
+requires-python = ">=3.11"
 
-[build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
+dependencies = [
+    "pandas>=2.2",
+    "pyarrow>=15.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
