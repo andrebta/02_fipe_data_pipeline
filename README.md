@@ -373,6 +373,7 @@ These records are handled through quarantine or deduplication instead of silent 
 │
 ├── tests/
 │   ├── conftest.py
+│   ├── test_extract.py
 │   ├── test_validate.py
 │   ├── test_transform.py
 │   ├── test_load.py
@@ -595,6 +596,10 @@ The tests use small synthetic datasets and temporary directories, so they do not
 
 Coverage includes:
 
+- release-tag parsing and period validation;
+- FIPEX release discovery and highest-patch selection;
+- Bronze inventory and missing-period detection;
+- extraction idempotency and remote-gap protection;
 - validation rules;
 - exact duplicates;
 - grain collisions;
