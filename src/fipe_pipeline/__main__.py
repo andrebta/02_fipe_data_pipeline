@@ -29,10 +29,12 @@ def main() -> int:
 
         LOGGER.info(
             "CLI execution finished successfully. "
-            "extracted=%s processed=%s gold_rebuilt=%s",
+            "extracted=%s processed=%s "
+            "gold_rebuilt=%s duckdb_refreshed=%s",
             len(result.extracted_months),
             len(result.processed_months),
             result.gold_result is not None,
+            result.duckdb_result is not None,
         )
 
         return 0

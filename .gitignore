@@ -20,6 +20,10 @@ data/silver/
 data/gold/
 data/quarantine/
 
+# DuckDB runtime files
+data/*.duckdb
+data/*.duckdb.wal
+
 # Logs
 logs/
 

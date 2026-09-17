@@ -1,39 +1,49 @@
 # FIPE Data Pipeline
 
-End-to-end data engineering pipeline for ingesting, validating, transforming, partitioning, and serving historical Brazilian vehicle price data from the FIPE table.
+End-to-end data engineering pipeline for ingesting, validating, transforming, partitioning, serving, and querying historical Brazilian vehicle price data from the FIPE table.
 
-The project was designed as a portfolio-grade data engineering workflow, with emphasis on:
+The project is designed as a portfolio-grade Data Engineering workflow with emphasis on:
 
 - incremental ingestion;
 - reproducibility;
 - idempotency;
 - data quality;
-- medallion-style data layers;
+- Medallion Architecture;
 - partitioned Parquet storage;
+- analytical SQL with DuckDB;
 - automated tests;
 - command-line execution;
-- observability through logging.
+- observability through logging;
+- CI with GitHub Actions.
 
-The current dataset covers **January 2001 through September 2026**.
+The current local dataset covers **January 2001 through September 2026**.
 
 ---
 
 ## 1. Project Overview
 
-The pipeline consumes monthly FIPE data published by the [FIPEX dataset project](https://github.com/fipex-labs/dataset).
+The pipeline consumes monthly FIPE data published by the FIPEX dataset project:
 
-The source publishes full historical snapshots. Instead of keeping a new full copy every month, this pipeline:
+```text
+https://github.com/fipex-labs/dataset
+```
 
-1. discovers available releases;
-2. downloads the full release snapshot temporarily;
-3. extracts only the requested reference month;
-4. persists that month in the Bronze layer;
-5. validates and transforms the data;
-6. writes partitioned Silver datasets;
-7. quarantines invalid records and audits removed duplicates;
-8. rebuilds a consolidated Gold dataset for analytical consumption.
+FIPEX publishes full historical snapshots. Instead of permanently storing a new full snapshot every month, this pipeline:
 
-This makes the local pipeline incremental even though the upstream publication model is snapshot-based.
+1. discovers available GitHub Releases;
+2. identifies missing reference months;
+3. temporarily downloads the required full source snapshot;
+4. extracts only the requested month;
+5. persists the raw monthly data in Bronze;
+6. validates and transforms it;
+7. writes trusted monthly Silver partitions;
+8. quarantines invalid or ambiguous rows;
+9. audits removed exact duplicates;
+10. rebuilds a consolidated Gold Parquet dataset;
+11. refreshes a persistent DuckDB analytical catalog;
+12. exposes reusable SQL views for downstream analysis.
+
+This makes the local architecture incremental even though the upstream publication model is snapshot-based.
 
 ---
 
@@ -43,35 +53,45 @@ This makes the local pipeline incremental even though the upstream publication m
 FIPEX GitHub Releases
         |
         v
-+-------------------+
-|      Bronze       |
-| raw monthly data  |
-+-------------------+
++---------------------+
+|       Bronze        |
+| raw monthly Parquet |
++---------------------+
         |
         | validate.py
         | transform.py
         v
-+-------------------+
-|      Silver       |
-| clean + trusted   |
-| monthly Parquet   |
-+-------------------+
++---------------------+
+|       Silver        |
+| trusted partitions  |
+| year=YYYY/month=MM  |
++---------------------+
         |
         | gold.py
         v
-+-------------------+
-|       Gold        |
-| consolidated file |
-| for analytics / BI|
-+-------------------+
++---------------------+
+|        Gold         |
+| consolidated Parquet|
++---------------------+
+        |
+        | DuckDB
+        v
++---------------------+
+| Analytical SQL Layer|
+| views over Parquet  |
++---------------------+
+        |
+        v
+ Analytics / Power BI
 ```
 
 Auxiliary outputs:
 
 ```text
-Invalid rows      -> data/quarantine/
-Removed duplicates-> data/quarantine/duplicates/
-Logs              -> logs/fipe_pipeline.log
+Invalid rows       -> data/quarantine/
+Removed duplicates -> data/quarantine/duplicates/
+DuckDB catalog     -> data/fipe.duckdb
+Logs               -> logs/fipe_pipeline.log
 ```
 
 ---
@@ -91,7 +111,7 @@ data/
 
 The historical snapshot is used only for the initial bootstrap.
 
-Monthly incremental files follow the naming convention:
+Monthly incremental files follow:
 
 ```text
 data/bronze/monthly/fipe_YYYY_MM.parquet
@@ -105,7 +125,7 @@ data/bronze/monthly/fipe_2026_09.parquet
 
 ### Silver
 
-Cleaned and validated data, partitioned by FIPE reference period.
+Cleaned and validated data partitioned by FIPE reference period.
 
 ```text
 data/silver/
@@ -114,7 +134,7 @@ data/silver/
         └── fipe.parquet
 ```
 
-The Silver layer is optimized for incremental maintenance and engineering operations.
+The Silver layer is optimized for incremental maintenance, traceability, localized reprocessing, and engineering operations.
 
 ### Gold
 
@@ -124,46 +144,67 @@ Consolidated analytical dataset:
 data/gold/fipe_prices.parquet
 ```
 
-The Gold layer is intended for downstream analytics, including Power BI.
+Gold is intended for downstream analytics and BI consumption.
+
+### DuckDB analytical layer
+
+Persistent DuckDB catalog:
+
+```text
+data/fipe.duckdb
+```
+
+DuckDB does not duplicate the FIPE dataset into internal tables. It registers views that read the Parquet datasets directly.
+
+Base views:
+
+```text
+silver_fipe
+gold_fipe
+```
+
+Reusable analytical views:
+
+```text
+vw_monthly_market_summary
+vw_latest_brand_summary
+vw_latest_fuel_mix
+vw_vehicle_type_summary
+```
 
 ---
 
 ## 4. Data Source
 
-Source repository:
-
-```text
-https://github.com/fipex-labs/dataset
-```
-
-The pipeline uses GitHub Releases and intentionally selects the original historical asset:
+The pipeline uses FIPEX GitHub Releases and intentionally selects:
 
 ```text
 fipex-prices-latest.parquet
 ```
 
-It does **not** use:
+It does not use:
 
 ```text
 fipex-prices-latest-merged.parquet
 ```
 
-This preserves the original historical naming observed at each FIPE reference period instead of retroactively applying consolidated names.
+This preserves historical source naming observed at each FIPE reference period instead of retroactively applying merged names.
 
 ---
 
 ## 5. Current Dataset Coverage
 
-After the historical bootstrap and the September 2026 incremental load:
+After the historical bootstrap and September 2026 incremental load:
 
 ```text
 First period:  2001-01
 Last period:   2026-09
 Partitions:    309
 Gold rows:     9,528,944
+Distinct FIPE codes in Gold: 11,398
 ```
 
-Historical bootstrap results:
+Historical bootstrap:
 
 ```text
 Periods loaded:      308
@@ -179,11 +220,23 @@ September 2026 incremental load:
 Rows: 51,012
 ```
 
+DuckDB reconciliation:
+
+```text
+Silver rows:      9,528,944
+Gold rows:        9,528,944
+Row counts match: True
+
+Silver coverage:  2001-01 -> 2026-09
+Gold coverage:    2001-01 -> 2026-09
+Periods match:    True
+```
+
 ---
 
 ## 6. Logical Grain
 
-The analytical grain is:
+The logical grain is:
 
 ```text
 ano_referencia
@@ -193,7 +246,7 @@ ano_referencia
 + sigla_combustivel
 ```
 
-In Python:
+Equivalent Python definition:
 
 ```python
 GRAIN_COLUMNS = [
@@ -205,7 +258,9 @@ GRAIN_COLUMNS = [
 ]
 ```
 
-Vehicle names and brand names are intentionally excluded from the grain because they can change historically for the same FIPE code.
+Vehicle and brand names are excluded from the grain because they can evolve historically for the same FIPE code.
+
+Fuel is included because a FIPE code may legitimately occur with different fuel variants.
 
 ---
 
@@ -229,61 +284,49 @@ effective_action
 message
 ```
 
-`effective_action` is:
-
-```text
-NONE
-```
-
-when a rule passes, and otherwise reflects the required operational response.
+`effective_action` is `NONE` when the rule passes and otherwise reflects the configured operational action.
 
 ### Implemented rules
 
 | Rule | Purpose | Severity | Action |
 |---|---|---:|---|
-| `DQ-SCHEMA-001` | Required schema validation | ERROR | `FAIL_PIPELINE` |
-| `DQ-NULL-001` | Required field null validation | ERROR | `QUARANTINE` |
+| `DQ-SCHEMA-001` | Required columns | ERROR | `FAIL_PIPELINE` |
+| `DQ-NULL-001` | Unexpected nulls | ERROR | `QUARANTINE` |
 | `DQ-NULL-002` | `zero_km` / `ano_modelo` consistency | ERROR | `QUARANTINE` |
-| `DQ-TIME-001` | Reference period validation | ERROR | `QUARANTINE` |
-| `DQ-TIME-002` | Structural model-year validation | ERROR | `QUARANTINE` |
-| `DQ-CODE-001` | FIPE code format validation | ERROR | `QUARANTINE` |
-| `DQ-PRICE-001` | Positive price validation | ERROR | `QUARANTINE` |
-| `DQ-PRICE-002` | Formatted vs numeric price consistency | ERROR | `QUARANTINE` |
+| `DQ-TIME-001` | Reference month domain | ERROR | `QUARANTINE` |
+| `DQ-TIME-002` | Model-year upper bound | ERROR | `QUARANTINE` |
+| `DQ-CODE-001` | FIPE code format | ERROR | `QUARANTINE` |
+| `DQ-PRICE-001` | Positive price | ERROR | `QUARANTINE` |
+| `DQ-PRICE-002` | Formatted/numeric price consistency | ERROR | `QUARANTINE` |
 | `DQ-DUP-001` | Exact duplicate detection | WARNING | `DEDUPLICATE` |
-| `DQ-GRAIN-001` | Non-exact grain collision detection | ERROR | `QUARANTINE` |
-| `DQ-FUEL-001` | Fuel name / abbreviation mapping validation | ERROR | `QUARANTINE` |
+| `DQ-GRAIN-001` | Non-exact grain collisions | ERROR | `QUARANTINE` |
+| `DQ-FUEL-001` | Fuel code/name consistency | ERROR | `QUARANTINE` |
 
-Only rules with:
+Only `FAIL_PIPELINE` stops execution.
+
+Rows requiring quarantine are removed from trusted Silver but preserved for audit.
+
+Detailed rule documentation:
 
 ```text
-FAIL_PIPELINE
+docs/data_quality_rules.md
 ```
-
-stop execution.
-
-Rows flagged for quarantine are removed from the trusted Silver output but preserved for audit.
 
 ---
 
 ## 8. Historical Data Quality Findings
 
-The source inspection identified several relevant historical characteristics.
-
 ### Zero-km model year
 
-`ano_modelo` is null only for zero-km vehicles.
-
-Observed relationship:
+Observed structural relationship:
 
 ```text
 zero_km = True  <=>  ano_modelo IS NULL
 ```
 
-This behavior is explicitly validated.
-
 ### FIPE code
 
-Observed format:
+Expected format:
 
 ```text
 ######-#
@@ -297,7 +340,7 @@ Regex:
 
 ### Fuel mapping
 
-Observed mappings are one-to-one:
+Historically observed mappings:
 
 ```text
 d -> Diesel
@@ -311,17 +354,17 @@ n -> GNV
 
 ### Model-year rule
 
-The structural rule is:
+Structural rule:
 
 ```text
 ano_modelo <= ano_referencia + 1
 ```
 
-Historical age gaps are treated as descriptive statistics, not validation thresholds.
+Historical age gaps are descriptive statistics, not validation thresholds.
 
-### Historical source anomalies
+### Historical anomalies
 
-The historical bootstrap identified:
+Historical inspection identified:
 
 ```text
 22 rows with valor_centavos = 0
@@ -329,7 +372,7 @@ The historical bootstrap identified:
 168 rows participating in non-exact grain collisions
 ```
 
-These records are handled through quarantine or deduplication instead of silent imputation.
+These records are handled by quarantine or deduplication rather than silent imputation.
 
 ---
 
@@ -338,14 +381,19 @@ These records are handled through quarantine or deduplication instead of silent 
 ```text
 02_fipe_data_pipeline/
 │
+├── .github/
+│   └── workflows/
+│       └── ci.yml
+│
 ├── data/
 │   ├── bronze/
 │   │   ├── historical/
 │   │   └── monthly/
 │   ├── silver/
 │   ├── gold/
-│   └── quarantine/
-│       └── duplicates/
+│   ├── quarantine/
+│   │   └── duplicates/
+│   └── fipe.duckdb
 │
 ├── docs/
 │   ├── data_dictionary.md
@@ -357,28 +405,33 @@ These records are handled through quarantine or deduplication instead of silent 
 ├── notebooks/
 │   ├── 01_source_inspection.ipynb
 │   ├── 02_historical_grain_analysis.ipynb
-│   └── 03_incremental_load_validation.ipynb
+│   ├── 03_incremental_load_validation.ipynb
+│   └── 04_sql_analytics.ipynb
 │
 ├── src/
 │   └── fipe_pipeline/
 │       ├── __init__.py
 │       ├── __main__.py
+│       ├── analytics_views.py
+│       ├── duckdb_layer.py
 │       ├── extract.py
-│       ├── validate.py
-│       ├── transform.py
-│       ├── load.py
 │       ├── gold.py
+│       ├── load.py
+│       ├── logging_config.py
 │       ├── pipeline.py
-│       └── logging_config.py
+│       ├── transform.py
+│       └── validate.py
 │
 ├── tests/
 │   ├── conftest.py
+│   ├── test_analytics_views.py
+│   ├── test_duckdb_layer.py
 │   ├── test_extract.py
-│   ├── test_validate.py
-│   ├── test_transform.py
-│   ├── test_load.py
 │   ├── test_gold.py
-│   └── test_pipeline.py
+│   ├── test_load.py
+│   ├── test_pipeline.py
+│   ├── test_transform.py
+│   └── test_validate.py
 │
 ├── .gitignore
 ├── pyproject.toml
@@ -394,26 +447,30 @@ These records are handled through quarantine or deduplication instead of silent 
 Responsibilities:
 
 - query GitHub Releases;
-- identify available FIPEX monthly releases;
-- select the original Parquet asset;
-- temporarily download the full snapshot;
-- filter the requested month;
-- persist only the monthly Bronze file;
-- detect missing local periods;
+- discover available FIPEX monthly releases;
+- select the highest patch for each period;
+- select the original non-merged Parquet asset;
+- download full snapshots temporarily;
+- filter only the requested month;
+- persist monthly Bronze files;
+- inspect local Bronze state;
+- discover missing periods;
 - support catch-up execution;
+- detect remote continuity gaps;
 - avoid re-downloading existing months.
 
 ### `validate.py`
 
 Responsibilities:
 
-- deterministic data-quality rules;
+- deterministic DQ rules;
 - schema validation;
 - null validation;
-- business-rule validation;
+- temporal validation;
+- price validation;
 - duplicate detection;
 - grain validation;
-- rule severity and operational action reporting.
+- severity/action reporting.
 
 ### `transform.py`
 
@@ -422,11 +479,11 @@ Responsibilities:
 - remove excess exact duplicates;
 - quarantine invalid records;
 - quarantine non-exact grain collisions;
-- standardize data types;
+- standardize dtypes;
 - create `data_referencia`;
-- add DQ audit metadata.
+- add audit metadata.
 
-Main return object:
+Primary return object:
 
 ```python
 TransformResult(
@@ -443,20 +500,41 @@ Responsibilities:
 - persist monthly Silver partitions;
 - persist quarantine records;
 - persist removed duplicates;
-- support historical bootstrap;
-- prevent unintended overwrite;
-- write Parquet files atomically.
+- perform historical bootstrap loads;
+- protect against unintended overwrite;
+- use atomic Parquet writes.
 
 ### `gold.py`
 
 Responsibilities:
 
 - discover Silver partitions;
-- concatenate all trusted Silver data;
-- remove operational-only columns such as `source_index`;
-- validate temporal continuity;
-- reject exact duplicates;
-- atomically persist the consolidated Gold dataset.
+- concatenate trusted Silver data;
+- remove operational-only columns;
+- validate monthly continuity;
+- reject exact duplicate rows;
+- persist one consolidated analytical Parquet file atomically.
+
+### `duckdb_layer.py`
+
+Responsibilities:
+
+- connect to the persistent DuckDB catalog;
+- register Parquet-backed Silver and Gold views;
+- validate Silver/Gold row counts and period coverage;
+- build or refresh the analytical DuckDB catalog;
+- safely close database connections.
+
+### `analytics_views.py`
+
+Creates reusable analytical SQL views:
+
+```text
+vw_monthly_market_summary
+vw_latest_brand_summary
+vw_latest_fuel_mix
+vw_vehicle_type_summary
+```
 
 ### `pipeline.py`
 
@@ -468,21 +546,17 @@ extract
 -> transform
 -> load Silver
 -> rebuild Gold
+-> refresh DuckDB catalog
+-> refresh analytical SQL views
 ```
 
-The historical bootstrap is intentionally kept outside the normal incremental pipeline because it is a one-time initialization step.
+The historical bootstrap is intentionally outside the normal incremental path because it is a one-time initialization operation.
 
 ### `logging_config.py`
 
-Configures:
+Configures console and file logging.
 
-- console logging;
-- file logging;
-- timestamps;
-- logger names;
-- log levels.
-
-Default log file:
+Default log:
 
 ```text
 logs/fipe_pipeline.log
@@ -490,9 +564,7 @@ logs/fipe_pipeline.log
 
 ### `__main__.py`
 
-Provides the package CLI entrypoint.
-
-The complete pipeline can be executed with:
+Provides the CLI entrypoint:
 
 ```bash
 python -m fipe_pipeline
@@ -500,31 +572,42 @@ python -m fipe_pipeline
 
 ---
 
-## 11. Idempotency
+## 11. Incremental and Idempotent Behavior
 
-The incremental pipeline was designed to be safely rerunnable.
-
-If a month already exists in Bronze and Silver:
+If the latest month already exists in Bronze and Silver:
 
 - it is not downloaded again;
 - it is not transformed again;
 - its Silver partition is not overwritten;
-- Gold is not rebuilt unnecessarily.
+- Gold is not rebuilt unnecessarily;
+- DuckDB is not refreshed unnecessarily.
 
-Example no-op execution:
+Typical no-op execution:
 
 ```text
 No missing Bronze months to download.
 Pending Bronze months for Silver processing: []
 Gold rebuild not required.
+DuckDB catalog refresh not required.
 Incremental FIPE pipeline completed.
+```
+
+When a new month becomes available:
+
+```text
+new FIPEX release
+-> Bronze monthly extract
+-> DQ validation
+-> transformation
+-> Silver partition
+-> Gold rebuild
+-> DuckDB refresh
+-> analytical views refresh
 ```
 
 ---
 
 ## 12. Setup
-
-### Requirements
 
 Recommended:
 
@@ -547,16 +630,21 @@ Upgrade pip:
 python -m pip install --upgrade pip
 ```
 
-Install the project in editable mode:
+Install the project and development dependencies:
 
 ```bash
-pip install -e .
+pip install -e ".[dev]"
 ```
 
-Install test dependencies if they are not already declared in the project configuration:
+Dependencies are declared in `pyproject.toml`.
 
-```bash
-pip install pytest
+Main runtime dependencies include:
+
+```text
+pandas
+pyarrow
+requests
+duckdb
 ```
 
 ---
@@ -569,55 +657,106 @@ From the project root:
 python -m fipe_pipeline
 ```
 
-The pipeline will:
+The CLI:
 
-1. inspect remote FIPEX releases;
-2. identify missing months;
-3. download new Bronze data when necessary;
-4. validate the new monthly dataset;
-5. transform valid records;
-6. quarantine invalid records;
-7. deduplicate exact duplicates;
-8. persist the new Silver partition;
-9. rebuild Gold when new data was processed;
-10. write execution logs.
+1. checks FIPEX releases;
+2. downloads missing Bronze months;
+3. validates new data;
+4. transforms trusted and rejected rows;
+5. writes Silver;
+6. rebuilds Gold when required;
+7. refreshes DuckDB when required;
+8. recreates analytical SQL views when required;
+9. writes execution logs.
+
+Successful no-op example:
+
+```text
+CLI execution finished successfully.
+extracted=0
+processed=0
+gold_rebuilt=False
+duckdb_refreshed=False
+```
 
 ---
 
 ## 14. Running Tests
 
-Run the complete automated test suite:
+Run:
 
 ```bash
 pytest -v
 ```
 
-The tests use small synthetic datasets and temporary directories, so they do not depend on the full 9+ million row dataset.
+Tests use synthetic datasets, temporary directories, mocks, and monkeypatching. They do not require the full production dataset.
 
 Coverage includes:
 
-- release-tag parsing and period validation;
-- FIPEX release discovery and highest-patch selection;
-- Bronze inventory and missing-period detection;
-- extraction idempotency and remote-gap protection;
-- validation rules;
+- release-tag parsing;
+- FIPEX release discovery;
+- highest-patch selection;
+- original asset selection;
+- Bronze inventory;
+- missing-period discovery;
+- remote-gap protection;
+- extraction idempotency;
+- DQ rules;
+- quarantine;
 - exact duplicates;
 - grain collisions;
-- quarantine behavior;
 - Silver partition writes;
 - overwrite protection;
-- historical multi-period loading;
+- historical bootstrap loading;
 - Gold consolidation;
 - temporal-gap detection;
+- DuckDB base views;
+- Silver/Gold reconciliation;
+- analytical SQL views;
 - pipeline no-op behavior;
-- blocking DQ failures;
-- non-blocking quarantine flows.
+- pipeline DuckDB refresh;
+- blocking and non-blocking DQ flows.
 
 ---
 
-## 15. Logging
+## 15. Continuous Integration
 
-Pipeline logs are written to:
+GitHub Actions workflow:
+
+```text
+.github/workflows/ci.yml
+```
+
+CI runs automatically on:
+
+```text
+push -> main
+pull request -> main
+```
+
+The test suite is executed on:
+
+```text
+Python 3.11
+Python 3.12
+```
+
+The workflow:
+
+```text
+checkout repository
+-> set up Python
+-> install project + dev dependencies
+-> pytest -v
+```
+
+This verifies that the project works in a clean Linux environment independent of the local development machine.
+
+---
+
+## 16. Logging
+
+Logs are written to:
 
 ```text
 logs/fipe_pipeline.log
@@ -626,132 +765,143 @@ logs/fipe_pipeline.log
 Example:
 
 ```text
-2026-09-17 11:19:32 | INFO | fipe_pipeline.pipeline | Starting incremental FIPE pipeline.
-2026-09-17 11:19:33 | INFO | fipe_pipeline.pipeline | No missing Bronze months to download.
-2026-09-17 11:19:34 | INFO | fipe_pipeline.pipeline | Pending Bronze months for Silver processing: []
-2026-09-17 11:19:34 | INFO | fipe_pipeline.pipeline | Gold rebuild not required.
-2026-09-17 11:19:34 | INFO | fipe_pipeline.pipeline | Incremental FIPE pipeline completed. extracted=0 processed=0 gold_rebuilt=False
+2026-09-17 15:04:14 | INFO | fipe_pipeline.pipeline | Starting incremental FIPE pipeline.
+2026-09-17 15:04:15 | INFO | fipe_pipeline.pipeline | No missing Bronze months to download.
+2026-09-17 15:04:18 | INFO | fipe_pipeline.pipeline | Pending Bronze months for Silver processing: []
+2026-09-17 15:04:18 | INFO | fipe_pipeline.pipeline | Gold rebuild not required.
+2026-09-17 15:04:18 | INFO | fipe_pipeline.pipeline | DuckDB catalog refresh not required.
 ```
 
 ---
 
-## 16. Storage Strategy
+## 17. DuckDB and SQL
 
-Parquet was selected because it provides:
+DuckDB is used as the analytical SQL engine over the existing Parquet architecture.
+
+The project does not need to copy the complete dataset into relational tables.
+
+Base views:
+
+```sql
+SELECT *
+FROM silver_fipe
+LIMIT 10;
+```
+
+```sql
+SELECT *
+FROM gold_fipe
+LIMIT 10;
+```
+
+Example analytical query:
+
+```sql
+SELECT
+    data_referencia,
+    COUNT(*) AS rows,
+    COUNT(DISTINCT codigo_fipe) AS distinct_fipe_codes,
+    MEDIAN(valor_centavos) / 100.0 AS median_price_brl
+FROM gold_fipe
+GROUP BY data_referencia
+ORDER BY data_referencia;
+```
+
+Reusable monthly summary:
+
+```sql
+SELECT *
+FROM vw_monthly_market_summary
+ORDER BY data_referencia DESC
+LIMIT 12;
+```
+
+---
+
+## 18. Current SQL Findings
+
+Examples from the September 2026 analytical layer:
+
+```text
+Monthly rows:              51,012
+Distinct FIPE codes:       11,396
+Median vehicle price:      R$ 57,724.50
+```
+
+Latest fuel mix:
+
+```text
+Gasolina       48.29%
+Diesel         32.56%
+Flex           14.02%
+Híbrido         2.18%
+Elétrico        1.88%
+Álcool          0.91%
+Gás Natural     0.16%
+```
+
+These metrics are analytical outputs, not validation rules.
+
+---
+
+## 19. Storage Strategy
+
+Parquet provides:
 
 - columnar storage;
-- good compression;
+- compression;
 - efficient analytical reads;
-- compatibility with Pandas, DuckDB, Power BI, Spark, Polars and other analytical tools;
-- natural support for partitioned datasets.
+- compatibility with Pandas;
+- direct DuckDB querying;
+- interoperability with BI and distributed tools.
 
-The Silver layer remains partitioned monthly for maintainability:
+Silver remains monthly partitioned:
 
 ```text
 year=YYYY/month=MM/
 ```
 
-The Gold layer is intentionally consolidated into a single Parquet file for simpler BI consumption.
+Gold is consolidated for simplified downstream consumption.
+
+DuckDB provides SQL semantics over both without replacing Parquet as the primary storage format.
 
 ---
 
-## 17. Why Python Instead of SQL?
+## 20. Design Decisions
 
-The current architecture is file-based rather than database-based.
+### Original source asset
 
-Python is therefore responsible for:
-
-- HTTP extraction;
-- release discovery;
-- control flow;
-- filesystem operations;
-- data-quality validation;
-- transformation;
-- partition management;
-- logging;
-- orchestration.
-
-SQL was not introduced artificially just for technology coverage.
-
-A future project stage will add **DuckDB + SQL** over the Parquet datasets, enabling analytical SQL without replacing the existing storage architecture.
-
----
-
-## 18. Planned DuckDB / SQL Layer
-
-Planned architecture:
-
-```text
-Python
-  -> ingestion, validation, transformation, orchestration
-
-Parquet
-  -> Bronze, Silver and Gold storage
-
-DuckDB + SQL
-  -> analytical queries directly over Parquet
-
-Power BI
-  -> visualization and reporting
-```
-
-Example future query:
-
-```sql
-SELECT
-    ano_referencia,
-    mes_referencia,
-    COUNT(*) AS registros,
-    MEDIAN(valor_centavos) / 100 AS mediana_preco
-FROM read_parquet('data/silver/year=*/month=*/fipe.parquet')
-GROUP BY
-    ano_referencia,
-    mes_referencia
-ORDER BY
-    ano_referencia,
-    mes_referencia;
-```
-
----
-
-## 19. Design Decisions
-
-### Original FIPEX asset
-
-The pipeline intentionally uses the unmerged source snapshot to preserve historical naming.
+The pipeline preserves the original unmerged FIPEX history.
 
 ### No silent imputation
 
-Unknown or invalid values are not invented.
+Unknown or ambiguous source values are not invented.
 
-Records that violate trusted-data rules are quarantined for inspection.
+### Names excluded from grain
 
-### Names are not part of the grain
+Brand/model labels may evolve historically.
 
-Brand and model names can evolve historically for the same FIPE code.
+### Fuel included in grain
 
-### Fuel is part of the grain
-
-A FIPE code can legitimately appear with different fuel variants.
+Fuel variants may legitimately differ for the same FIPE code.
 
 ### Monthly Silver partitions
 
-Partitioning supports:
-
-- incremental writes;
-- localized reprocessing;
-- lower operational blast radius;
-- easier auditing.
+Partitioning supports incremental writes, auditing, and localized reprocessing.
 
 ### Consolidated Gold
 
-Gold prioritizes simplicity for downstream analytics and Power BI.
+Gold prioritizes downstream analytical simplicity.
+
+### DuckDB over Parquet
+
+SQL was introduced where it provides real analytical value rather than being added only for technology coverage.
 
 ---
 
-## 20. Reproducibility and Operational Safety
+## 21. Reproducibility and Operational Safety
 
-The project implements several safeguards:
+Implemented safeguards include:
 
 - deterministic DQ rules;
 - atomic Parquet writes;
@@ -761,56 +911,45 @@ The project implements several safeguards:
 - remote-gap detection;
 - incremental catch-up;
 - idempotent CLI execution;
-- automated tests;
-- persistent logs.
+- persistent logs;
+- automated pytest suite;
+- GitHub Actions CI;
+- DuckDB Silver/Gold reconciliation.
 
 ---
 
-## 21. Data Files and Git
+## 22. Data Files and Git
 
-Large data files are intentionally excluded from Git.
+Generated datasets and runtime artifacts are not committed.
 
-Typical ignored paths include:
+Typical ignored paths:
 
 ```gitignore
 data/bronze/
 data/silver/
 data/gold/
 data/quarantine/
+data/*.duckdb
+data/*.duckdb.wal
 logs/
 ```
 
-The repository stores code, documentation, notebooks and tests, while datasets are generated locally by the pipeline.
+The repository stores source code, documentation, notebooks, tests, and CI configuration.
 
 ---
 
-## 22. Documentation
+## 23. Documentation
 
-Additional project documentation:
+Additional documentation:
 
 ```text
 docs/data_dictionary.md
 docs/data_quality_rules.md
 ```
 
-The data dictionary documents the source fields, data types, domains and observed characteristics.
+The data dictionary documents source fields, data types, domains, and observed characteristics.
 
-The data-quality document describes implemented validation rules, thresholds, severities and actions.
-
----
-
-## 23. Roadmap
-
-Planned next steps include:
-
-- DuckDB integration;
-- SQL analytical layer;
-- additional Gold analytical models;
-- improved pipeline metadata / run manifests;
-- broader pytest coverage;
-- CI execution with GitHub Actions;
-- Power BI consumption from the Gold layer;
-- possible scheduling / orchestration automation.
+The DQ document is synchronized with the currently implemented rule IDs, severities, actions, and transformation behavior.
 
 ---
 
@@ -819,41 +958,57 @@ Planned next steps include:
 ```text
 Python
 Pandas
-PyArrow / Parquet
+PyArrow
+Parquet
+Requests
 GitHub Releases API
+DuckDB
+SQL
 Pytest
-DuckDB (planned)
-SQL (planned)
+GitHub Actions
 Power BI
 Git / GitHub
 ```
 
 ---
 
-## 25. Project Status
+## 25. Roadmap
 
-Current pipeline status:
+Potential next steps:
+
+- richer SQL analytical models;
+- Power BI integration with Gold/DuckDB outputs;
+- pipeline run manifests and execution metadata;
+- test coverage reporting;
+- linting/static analysis in CI;
+- scheduling/orchestration;
+- Dockerized execution;
+- cloud object storage adaptation.
+
+---
+
+## 26. Project Status
 
 ```text
-Historical bootstrap: complete
-Incremental extraction: complete
-Data-quality validation: complete
-Transformation layer: complete
-Partitioned Silver load: complete
-Gold consolidation: complete
-Logging: complete
-CLI entrypoint: complete
-Automated tests: complete
-DuckDB / SQL layer: planned
+Historical bootstrap:       complete
+Incremental extraction:     complete
+Data-quality validation:    complete
+Transformation layer:       complete
+Partitioned Silver load:    complete
+Gold consolidation:         complete
+DuckDB analytical layer:    complete
+Reusable SQL views:         complete
+Logging:                    complete
+CLI entrypoint:             complete
+Automated tests:            complete
+GitHub Actions CI:          complete
 ```
 
-The project is currently capable of running incrementally from the command line with:
+Primary commands:
 
 ```bash
 python -m fipe_pipeline
 ```
-
-and validating the implementation with:
 
 ```bash
 pytest -v

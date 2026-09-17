@@ -7,6 +7,7 @@ Description-Content-Type: text/markdown
 Requires-Dist: pandas>=2.2
 Requires-Dist: pyarrow>=15.0
 Requires-Dist: requests>=2.31
+Requires-Dist: duckdb>=1.1
 Provides-Extra: dev
 Requires-Dist: pytest>=8.0; extra == "dev"
 
@@ -385,6 +386,7 @@ These records are handled through quarantine or deduplication instead of silent 
 │
 ├── tests/
 │   ├── conftest.py
+│   ├── test_extract.py
 │   ├── test_validate.py
 │   ├── test_transform.py
 │   ├── test_load.py
@@ -607,6 +609,10 @@ The tests use small synthetic datasets and temporary directories, so they do not
 
 Coverage includes:
 
+- release-tag parsing and period validation;
+- FIPEX release discovery and highest-patch selection;
+- Bronze inventory and missing-period detection;
+- extraction idempotency and remote-gap protection;
 - validation rules;
 - exact duplicates;
 - grain collisions;

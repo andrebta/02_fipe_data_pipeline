@@ -19,6 +19,10 @@ def test_run_pipeline_noop(
         / "gold"
         / "fipe_prices.parquet"
     )
+    duckdb_path = (
+        tmp_path
+        / "fipe.duckdb"
+    )
 
     bronze_dir.mkdir(
         parents=True,
@@ -63,6 +67,7 @@ def test_run_pipeline_noop(
         parents=True,
     )
     gold_path.write_bytes(b"existing")
+    duckdb_path.write_bytes(b"existing")
 
     monkeypatch.setattr(
         pipeline_module,
@@ -76,11 +81,13 @@ def test_run_pipeline_noop(
         bronze_monthly_dir=bronze_dir,
         silver_dir=silver_dir,
         gold_path=gold_path,
+        duckdb_path=duckdb_path,
     )
 
     assert result.extracted_months == ()
     assert result.processed_months == ()
     assert result.gold_result is None
+    assert result.duckdb_result is None
 
 
 def test_blocking_rule_raises_runtime_error():
@@ -146,3 +153,106 @@ def test_process_monthly_bronze_uses_quarantine_without_blocking(
     assert "DQ-PRICE-001" in result.failed_rules
     assert result.silver_rows == 1
     assert result.quarantine_rows == 1
+
+
+def test_pipeline_refreshes_duckdb_after_gold_rebuild(
+    tmp_path,
+    monkeypatch,
+):
+    bronze_dir = tmp_path / "bronze"
+    silver_dir = tmp_path / "silver"
+    gold_path = (
+        tmp_path
+        / "gold"
+        / "fipe_prices.parquet"
+    )
+    duckdb_path = (
+        tmp_path
+        / "fipe.duckdb"
+    )
+
+    bronze_dir.mkdir(
+        parents=True,
+    )
+
+    bronze_file = (
+        bronze_dir
+        / "fipe_2026_09.parquet"
+    )
+
+    pd.DataFrame(
+        {
+            "ano_referencia": [2026],
+            "mes_referencia": [9],
+        }
+    ).to_parquet(
+        bronze_file,
+        index=False,
+    )
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "extract_missing_months",
+        lambda **kwargs: SimpleNamespace(
+            extraction_results=(),
+        ),
+    )
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "process_monthly_bronze",
+        lambda *args, **kwargs: SimpleNamespace(
+            period=Period(2026, 9),
+        ),
+    )
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "build_gold",
+        lambda **kwargs: SimpleNamespace(
+            rows=1,
+            source_partitions=1,
+            destination=gold_path,
+        ),
+    )
+
+    expected_duckdb_result = SimpleNamespace(
+        validation=SimpleNamespace(
+            silver_rows=1,
+            gold_rows=1,
+            gold_first_period=(2026, 9),
+            gold_last_period=(2026, 9),
+        )
+    )
+
+    captured = {}
+
+    def fake_build_duckdb_catalog(**kwargs):
+        captured.update(kwargs)
+        return expected_duckdb_result
+
+    monkeypatch.setattr(
+        pipeline_module,
+        "build_duckdb_catalog",
+        fake_build_duckdb_catalog,
+    )
+
+    result = pipeline_module.run_pipeline(
+        bronze_monthly_dir=bronze_dir,
+        silver_dir=silver_dir,
+        gold_path=gold_path,
+        duckdb_path=duckdb_path,
+    )
+
+    assert len(result.processed_months) == 1
+    assert result.gold_result is not None
+    assert result.duckdb_result is expected_duckdb_result
+
+    assert captured["database_path"] == duckdb_path
+    assert captured["gold_path"] == gold_path
+    assert captured["silver_glob"] == (
+        silver_dir
+        / "year=*"
+        / "month=*"
+        / "fipe.parquet"
+    )

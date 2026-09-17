@@ -14,6 +14,7 @@ src/fipe_pipeline/logging_config.py
 src/fipe_pipeline/pipeline.py
 src/fipe_pipeline/transform.py
 src/fipe_pipeline/validate.py
+tests/test_extract.py
 tests/test_gold.py
 tests/test_load.py
 tests/test_pipeline.py
