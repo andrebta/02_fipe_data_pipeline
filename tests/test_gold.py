@@ -13,12 +13,7 @@ def _write_silver_partition(
     month: int,
     rows: list[dict],
 ):
-    path = (
-        root
-        / f"year={year}"
-        / f"month={month:02d}"
-        / "fipe.parquet"
-    )
+    path = root / f"year={year}" / f"month={month:02d}" / "fipe.parquet"
 
     path.parent.mkdir(
         parents=True,
@@ -63,11 +58,7 @@ def _gold_row(
 
 def test_build_gold_consolidates_partitions(tmp_path):
     silver = tmp_path / "silver"
-    gold_path = (
-        tmp_path
-        / "gold"
-        / "fipe_prices.parquet"
-    )
+    gold_path = tmp_path / "gold" / "fipe_prices.parquet"
 
     _write_silver_partition(
         silver,
@@ -106,9 +97,7 @@ def test_build_gold_consolidates_partitions(tmp_path):
     assert result.last_period == (2026, 9)
     assert gold_path.exists()
 
-    gold = pd.read_parquet(
-        gold_path
-    )
+    gold = pd.read_parquet(gold_path)
 
     assert "source_index" not in gold.columns
     assert len(gold) == 2
@@ -149,21 +138,13 @@ def test_build_gold_rejects_temporal_gap(tmp_path):
     ):
         build_gold(
             silver_dir=silver,
-            destination=(
-                tmp_path
-                / "gold"
-                / "fipe_prices.parquet"
-            ),
+            destination=(tmp_path / "gold" / "fipe_prices.parquet"),
         )
 
 
 def test_build_gold_requires_explicit_overwrite(tmp_path):
     silver = tmp_path / "silver"
-    destination = (
-        tmp_path
-        / "gold"
-        / "fipe_prices.parquet"
-    )
+    destination = tmp_path / "gold" / "fipe_prices.parquet"
 
     _write_silver_partition(
         silver,

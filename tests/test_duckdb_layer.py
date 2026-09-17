@@ -54,17 +54,11 @@ def test_register_views_and_validate_layer(tmp_path):
     )
 
     _write_parquet(
-        silver_root
-        / "year=2026"
-        / "month=08"
-        / "fipe.parquet",
+        silver_root / "year=2026" / "month=08" / "fipe.parquet",
         [august],
     )
     _write_parquet(
-        silver_root
-        / "year=2026"
-        / "month=09"
-        / "fipe.parquet",
+        silver_root / "year=2026" / "month=09" / "fipe.parquet",
         [september],
     )
     _write_parquet(
@@ -77,12 +71,7 @@ def test_register_views_and_validate_layer(tmp_path):
     try:
         register_parquet_views(
             con,
-            silver_glob=(
-                silver_root
-                / "year=*"
-                / "month=*"
-                / "fipe.parquet"
-            ),
+            silver_glob=(silver_root / "year=*" / "month=*" / "fipe.parquet"),
             gold_path=gold_path,
         )
 
@@ -102,9 +91,7 @@ def test_register_views_and_validate_layer(tmp_path):
 
 
 def test_register_views_requires_gold_file(tmp_path):
-    con = connect_duckdb(
-        tmp_path / "fipe.duckdb"
-    )
+    con = connect_duckdb(tmp_path / "fipe.duckdb")
 
     try:
         with pytest.raises(
@@ -114,17 +101,9 @@ def test_register_views_requires_gold_file(tmp_path):
             register_parquet_views(
                 con,
                 silver_glob=(
-                    tmp_path
-                    / "silver"
-                    / "year=*"
-                    / "month=*"
-                    / "fipe.parquet"
+                    tmp_path / "silver" / "year=*" / "month=*" / "fipe.parquet"
                 ),
-                gold_path=(
-                    tmp_path
-                    / "gold"
-                    / "missing.parquet"
-                ),
+                gold_path=(tmp_path / "gold" / "missing.parquet"),
             )
     finally:
         con.close()
@@ -142,10 +121,7 @@ def test_views_read_parquet_without_copying_into_tables(tmp_path):
     )
 
     _write_parquet(
-        silver_root
-        / "year=2026"
-        / "month=09"
-        / "fipe.parquet",
+        silver_root / "year=2026" / "month=09" / "fipe.parquet",
         [row],
     )
     _write_parquet(
@@ -158,12 +134,7 @@ def test_views_read_parquet_without_copying_into_tables(tmp_path):
     try:
         register_parquet_views(
             con,
-            silver_glob=(
-                silver_root
-                / "year=*"
-                / "month=*"
-                / "fipe.parquet"
-            ),
+            silver_glob=(silver_root / "year=*" / "month=*" / "fipe.parquet"),
             gold_path=gold_path,
         )
 

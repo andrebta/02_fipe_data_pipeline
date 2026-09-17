@@ -6,9 +6,7 @@ from fipe_pipeline.validate import run_validations
 
 
 def _row(report: pd.DataFrame, rule: str) -> pd.Series:
-    return report.loc[
-        report["rule"].eq(rule)
-    ].iloc[0]
+    return report.loc[report["rule"].eq(rule)].iloc[0]
 
 
 def test_valid_dataframe_passes_all_rules(valid_month_df):
@@ -47,9 +45,7 @@ def test_exact_duplicate_is_detected(valid_month_df):
 
 
 def test_missing_required_column_blocks_pipeline(valid_month_df):
-    df = valid_month_df.drop(
-        columns=["codigo_fipe"]
-    )
+    df = valid_month_df.drop(columns=["codigo_fipe"])
 
     report = run_validations(df)
     result = _row(report, "DQ-SCHEMA-001")

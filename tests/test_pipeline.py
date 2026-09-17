@@ -14,26 +14,14 @@ def test_run_pipeline_noop(
 ):
     bronze_dir = tmp_path / "bronze"
     silver_dir = tmp_path / "silver"
-    gold_path = (
-        tmp_path
-        / "gold"
-        / "fipe_prices.parquet"
-    )
-    duckdb_path = (
-        tmp_path
-        / "fipe.duckdb"
-    )
+    gold_path = tmp_path / "gold" / "fipe_prices.parquet"
+    duckdb_path = tmp_path / "fipe.duckdb"
 
     bronze_dir.mkdir(
         parents=True,
     )
 
-    silver_partition = (
-        silver_dir
-        / "year=2026"
-        / "month=09"
-        / "fipe.parquet"
-    )
+    silver_partition = silver_dir / "year=2026" / "month=09" / "fipe.parquet"
     silver_partition.parent.mkdir(
         parents=True,
     )
@@ -48,10 +36,7 @@ def test_run_pipeline_noop(
         index=False,
     )
 
-    bronze_file = (
-        bronze_dir
-        / "fipe_2026_09.parquet"
-    )
+    bronze_file = bronze_dir / "fipe_2026_09.parquet"
 
     pd.DataFrame(
         {
@@ -117,19 +102,14 @@ def test_blocking_rule_raises_runtime_error():
     except RuntimeError as exc:
         assert "DQ-SCHEMA-001" in str(exc)
     else:
-        raise AssertionError(
-            "Expected RuntimeError for FAIL_PIPELINE rule."
-        )
+        raise AssertionError("Expected RuntimeError for FAIL_PIPELINE rule.")
 
 
 def test_process_monthly_bronze_uses_quarantine_without_blocking(
     tmp_path,
     valid_month_df,
 ):
-    bronze_path = (
-        tmp_path
-        / "fipe_2026_09.parquet"
-    )
+    bronze_path = tmp_path / "fipe_2026_09.parquet"
 
     df = valid_month_df.copy()
     df.loc[0, "valor_centavos"] = 0
@@ -161,24 +141,14 @@ def test_pipeline_refreshes_duckdb_after_gold_rebuild(
 ):
     bronze_dir = tmp_path / "bronze"
     silver_dir = tmp_path / "silver"
-    gold_path = (
-        tmp_path
-        / "gold"
-        / "fipe_prices.parquet"
-    )
-    duckdb_path = (
-        tmp_path
-        / "fipe.duckdb"
-    )
+    gold_path = tmp_path / "gold" / "fipe_prices.parquet"
+    duckdb_path = tmp_path / "fipe.duckdb"
 
     bronze_dir.mkdir(
         parents=True,
     )
 
-    bronze_file = (
-        bronze_dir
-        / "fipe_2026_09.parquet"
-    )
+    bronze_file = bronze_dir / "fipe_2026_09.parquet"
 
     pd.DataFrame(
         {
@@ -251,8 +221,5 @@ def test_pipeline_refreshes_duckdb_after_gold_rebuild(
     assert captured["database_path"] == duckdb_path
     assert captured["gold_path"] == gold_path
     assert captured["silver_glob"] == (
-        silver_dir
-        / "year=*"
-        / "month=*"
-        / "fipe.parquet"
+        silver_dir / "year=*" / "month=*" / "fipe.parquet"
     )

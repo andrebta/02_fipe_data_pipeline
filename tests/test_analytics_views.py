@@ -86,17 +86,11 @@ def _prepare_connection(tmp_path):
     ]
 
     _write_parquet(
-        silver_root
-        / "year=2026"
-        / "month=08"
-        / "fipe.parquet",
+        silver_root / "year=2026" / "month=08" / "fipe.parquet",
         [rows[0]],
     )
     _write_parquet(
-        silver_root
-        / "year=2026"
-        / "month=09"
-        / "fipe.parquet",
+        silver_root / "year=2026" / "month=09" / "fipe.parquet",
         rows[1:],
     )
     _write_parquet(
@@ -104,18 +98,11 @@ def _prepare_connection(tmp_path):
         rows,
     )
 
-    con = connect_duckdb(
-        tmp_path / "fipe.duckdb"
-    )
+    con = connect_duckdb(tmp_path / "fipe.duckdb")
 
     register_parquet_views(
         con,
-        silver_glob=(
-            silver_root
-            / "year=*"
-            / "month=*"
-            / "fipe.parquet"
-        ),
+        silver_glob=(silver_root / "year=*" / "month=*" / "fipe.parquet"),
         gold_path=gold_path,
     )
 
@@ -161,12 +148,8 @@ def test_monthly_market_summary_metrics(tmp_path):
 
         assert len(result) == 1
         assert int(result.loc[0, "rows"]) == 2
-        assert int(
-            result.loc[0, "distinct_fipe_codes"]
-        ) == 2
-        assert float(
-            result.loc[0, "median_price_brl"]
-        ) == 155_000.0
+        assert int(result.loc[0, "distinct_fipe_codes"]) == 2
+        assert float(result.loc[0, "median_price_brl"]) == 155_000.0
     finally:
         con.close()
 
@@ -191,14 +174,10 @@ def test_latest_brand_summary_uses_latest_period_only(tmp_path):
             "Marca B",
         ]
 
-        marca_a = result.loc[
-            result["nome_marca"].eq("Marca A")
-        ].iloc[0]
+        marca_a = result.loc[result["nome_marca"].eq("Marca A")].iloc[0]
 
         assert int(marca_a["rows"]) == 1
-        assert float(
-            marca_a["median_price_brl"]
-        ) == 110_000.0
+        assert float(marca_a["median_price_brl"]) == 110_000.0
     finally:
         con.close()
 
@@ -219,10 +198,13 @@ def test_latest_fuel_mix_percentages(tmp_path):
         ).df()
 
         assert int(result["rows"].sum()) == 2
-        assert round(
-            float(result["pct"].sum()),
-            2,
-        ) == 100.0
+        assert (
+            round(
+                float(result["pct"].sum()),
+                2,
+            )
+            == 100.0
+        )
     finally:
         con.close()
 
@@ -243,9 +225,12 @@ def test_vehicle_type_summary_covers_all_rows(tmp_path):
         ).df()
 
         assert int(result["rows"].sum()) == 3
-        assert round(
-            float(result["pct"].sum()),
-            2,
-        ) == 100.0
+        assert (
+            round(
+                float(result["pct"].sum()),
+                2,
+            )
+            == 100.0
+        )
     finally:
         con.close()

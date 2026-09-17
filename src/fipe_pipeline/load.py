@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pandas as pd
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 DEFAULT_SILVER_DIR = PROJECT_ROOT / "data" / "silver"
@@ -52,19 +51,13 @@ def _validate_single_period(df: pd.DataFrame) -> tuple[int, int]:
     _validate_period_columns(df)
 
     if df.empty:
-        raise ValueError(
-            "Cannot determine reference period from an empty dataframe."
-        )
+        raise ValueError("Cannot determine reference period from an empty dataframe.")
 
-    periods = (
-        df[["ano_referencia", "mes_referencia"]]
-        .drop_duplicates()
-    )
+    periods = df[["ano_referencia", "mes_referencia"]].drop_duplicates()
 
     if len(periods) != 1:
         raise ValueError(
-            "Expected exactly one reference period in dataframe, "
-            f"found {len(periods)}."
+            f"Expected exactly one reference period in dataframe, found {len(periods)}."
         )
 
     row = periods.iloc[0]
@@ -73,9 +66,7 @@ def _validate_single_period(df: pd.DataFrame) -> tuple[int, int]:
     month = int(row["mes_referencia"])
 
     if not 1 <= month <= 12:
-        raise ValueError(
-            f"Invalid reference month: {month}"
-        )
+        raise ValueError(f"Invalid reference month: {month}")
 
     return year, month
 
@@ -91,9 +82,7 @@ def _list_periods(
     periods_df = (
         df[["ano_referencia", "mes_referencia"]]
         .drop_duplicates()
-        .sort_values(
-            ["ano_referencia", "mes_referencia"]
-        )
+        .sort_values(["ano_referencia", "mes_referencia"])
     )
 
     periods: list[tuple[int, int]] = []
@@ -103,9 +92,7 @@ def _list_periods(
         month = int(row.mes_referencia)
 
         if not 1 <= month <= 12:
-            raise ValueError(
-                f"Invalid reference month: {month}"
-            )
+            raise ValueError(f"Invalid reference month: {month}")
 
         periods.append((year, month))
 
@@ -121,10 +108,7 @@ def _filter_period(
         return df.copy()
 
     return (
-        df.loc[
-            (df["ano_referencia"] == year)
-            & (df["mes_referencia"] == month)
-        ]
+        df.loc[(df["ano_referencia"] == year) & (df["mes_referencia"] == month)]
         .copy()
         .reset_index(drop=True)
     )
@@ -136,12 +120,7 @@ def _build_partition_path(
     month: int,
     filename: str,
 ) -> Path:
-    return (
-        Path(base_dir)
-        / f"year={year:04d}"
-        / f"month={month:02d}"
-        / filename
-    )
+    return Path(base_dir) / f"year={year:04d}" / f"month={month:02d}" / filename
 
 
 def _atomic_write_parquet(
@@ -153,9 +132,7 @@ def _atomic_write_parquet(
         exist_ok=True,
     )
 
-    temporary_path = destination.with_suffix(
-        destination.suffix + ".part"
-    )
+    temporary_path = destination.with_suffix(destination.suffix + ".part")
 
     if temporary_path.exists():
         temporary_path.unlink()
@@ -226,13 +203,10 @@ def _load_single_period_frames(
 ) -> LoadResult:
     if silver.empty:
         raise ValueError(
-            "Silver dataframe is empty. Refusing to create an empty "
-            "Silver partition."
+            "Silver dataframe is empty. Refusing to create an empty Silver partition."
         )
 
-    year, month = _validate_single_period(
-        silver
-    )
+    year, month = _validate_single_period(silver)
 
     (
         silver_path,
@@ -254,24 +228,16 @@ def _load_single_period_frames(
         )
 
     if not quarantine.empty:
-        q_year, q_month = _validate_single_period(
-            quarantine
-        )
+        q_year, q_month = _validate_single_period(quarantine)
 
         if (q_year, q_month) != (year, month):
-            raise ValueError(
-                "Quarantine period does not match Silver period."
-            )
+            raise ValueError("Quarantine period does not match Silver period.")
 
     if not duplicates.empty:
-        d_year, d_month = _validate_single_period(
-            duplicates
-        )
+        d_year, d_month = _validate_single_period(duplicates)
 
         if (d_year, d_month) != (year, month):
-            raise ValueError(
-                "Duplicates period does not match Silver period."
-            )
+            raise ValueError("Duplicates period does not match Silver period.")
 
     _atomic_write_parquet(
         silver,
@@ -362,30 +328,16 @@ def load_historical_transform_result(
     duplicates = transform_result.duplicates
 
     if silver.empty:
-        raise ValueError(
-            "Historical Silver dataframe is empty."
-        )
+        raise ValueError("Historical Silver dataframe is empty.")
 
-    silver_periods = _list_periods(
-        silver
-    )
-    quarantine_periods = set(
-        _list_periods(quarantine)
-    )
-    duplicate_periods = set(
-        _list_periods(duplicates)
-    )
+    silver_periods = _list_periods(silver)
+    quarantine_periods = set(_list_periods(quarantine))
+    duplicate_periods = set(_list_periods(duplicates))
 
-    silver_period_set = set(
-        silver_periods
-    )
+    silver_period_set = set(silver_periods)
 
-    unexpected_quarantine_periods = (
-        quarantine_periods - silver_period_set
-    )
-    unexpected_duplicate_periods = (
-        duplicate_periods - silver_period_set
-    )
+    unexpected_quarantine_periods = quarantine_periods - silver_period_set
+    unexpected_duplicate_periods = duplicate_periods - silver_period_set
 
     if unexpected_quarantine_periods:
         raise ValueError(
@@ -412,19 +364,14 @@ def load_historical_transform_result(
             )
 
             if silver_path.exists():
-                existing_partitions.append(
-                    silver_path
-                )
+                existing_partitions.append(silver_path)
 
         if existing_partitions:
             preview = existing_partitions[:10]
             suffix = (
                 ""
                 if len(existing_partitions) <= 10
-                else (
-                    f" ... and "
-                    f"{len(existing_partitions) - 10} more"
-                )
+                else (f" ... and {len(existing_partitions) - 10} more")
             )
 
             raise FileExistsError(
@@ -465,30 +412,17 @@ def load_historical_transform_result(
             overwrite=overwrite,
         )
 
-        partition_results.append(
-            result
-        )
+        partition_results.append(result)
 
     first_period = silver_periods[0]
     last_period = silver_periods[-1]
 
     return HistoricalLoadResult(
         periods_loaded=len(partition_results),
-        silver_rows=sum(
-            result.silver_rows
-            for result in partition_results
-        ),
-        quarantine_rows=sum(
-            result.quarantine_rows
-            for result in partition_results
-        ),
-        duplicate_rows=sum(
-            result.duplicate_rows
-            for result in partition_results
-        ),
+        silver_rows=sum(result.silver_rows for result in partition_results),
+        quarantine_rows=sum(result.quarantine_rows for result in partition_results),
+        duplicate_rows=sum(result.duplicate_rows for result in partition_results),
         first_period=first_period,
         last_period=last_period,
-        partition_results=tuple(
-            partition_results
-        ),
+        partition_results=tuple(partition_results),
     )

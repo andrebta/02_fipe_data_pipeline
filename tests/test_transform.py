@@ -6,9 +6,7 @@ from fipe_pipeline.transform import transform_bronze_to_silver
 
 
 def test_transform_valid_month_to_silver(valid_month_df):
-    result = transform_bronze_to_silver(
-        valid_month_df
-    )
+    result = transform_bronze_to_silver(valid_month_df)
 
     assert len(result.silver) == 2
     assert result.quarantine.empty
@@ -18,10 +16,7 @@ def test_transform_valid_month_to_silver(valid_month_df):
     assert "source_index" in result.silver.columns
 
     assert result.silver["data_referencia"].nunique() == 1
-    assert (
-        result.silver["data_referencia"].iloc[0]
-        == pd.Timestamp("2026-09-01")
-    )
+    assert result.silver["data_referencia"].iloc[0] == pd.Timestamp("2026-09-01")
 
 
 def test_transform_removes_excess_exact_duplicate(valid_month_df):
@@ -36,11 +31,7 @@ def test_transform_removes_excess_exact_duplicate(valid_month_df):
     assert len(result.duplicates) == 1
     assert result.quarantine.empty
 
-    assert (
-        result.duplicates["dq_reasons"]
-        .eq("DQ-DUP-001")
-        .all()
-    )
+    assert result.duplicates["dq_reasons"].eq("DQ-DUP-001").all()
 
 
 def test_transform_quarantines_zero_price(valid_month_df):
@@ -54,11 +45,7 @@ def test_transform_quarantines_zero_price(valid_month_df):
     assert len(result.quarantine) == 1
     assert result.duplicates.empty
 
-    assert (
-        result.quarantine["dq_reasons"]
-        .str.contains("DQ-PRICE-001")
-        .all()
-    )
+    assert result.quarantine["dq_reasons"].str.contains("DQ-PRICE-001").all()
 
 
 def test_transform_quarantines_non_exact_grain_collision(
@@ -77,8 +64,4 @@ def test_transform_quarantines_non_exact_grain_collision(
     result = transform_bronze_to_silver(df)
 
     assert len(result.quarantine) == 2
-    assert (
-        result.quarantine["dq_reasons"]
-        .str.contains("DQ-GRAIN-001")
-        .all()
-    )
+    assert result.quarantine["dq_reasons"].str.contains("DQ-GRAIN-001").all()

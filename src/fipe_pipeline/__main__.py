@@ -6,7 +6,6 @@ import sys
 from fipe_pipeline.logging_config import configure_logging
 from fipe_pipeline.pipeline import run_pipeline
 
-
 LOGGER = logging.getLogger(__name__)
 
 
@@ -40,9 +39,7 @@ def main() -> int:
         return 0
 
     except Exception:
-        LOGGER.exception(
-            "FIPE pipeline execution failed."
-        )
+        LOGGER.exception("FIPE pipeline execution failed.")
 
         return 1
 

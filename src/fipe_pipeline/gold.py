@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pandas as pd
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 DEFAULT_SILVER_DIR = PROJECT_ROOT / "data" / "silver"
@@ -30,18 +29,12 @@ def _list_silver_files(
     silver_dir = Path(silver_dir)
 
     if not silver_dir.exists():
-        raise FileNotFoundError(
-            f"Silver directory does not exist: {silver_dir}"
-        )
+        raise FileNotFoundError(f"Silver directory does not exist: {silver_dir}")
 
-    files = sorted(
-        silver_dir.glob("year=*/month=*/fipe.parquet")
-    )
+    files = sorted(silver_dir.glob("year=*/month=*/fipe.parquet"))
 
     if not files:
-        raise FileNotFoundError(
-            f"No Silver partitions found in: {silver_dir}"
-        )
+        raise FileNotFoundError(f"No Silver partitions found in: {silver_dir}")
 
     return files
 
@@ -55,9 +48,7 @@ def _read_silver_partitions(
         frame = pd.read_parquet(path)
 
         if frame.empty:
-            raise ValueError(
-                f"Silver partition is empty: {path}"
-            )
+            raise ValueError(f"Silver partition is empty: {path}")
 
         frames.append(frame)
 
@@ -80,23 +71,16 @@ def _validate_gold_dataframe(
 
     if missing_columns:
         raise ValueError(
-            "Gold dataframe is missing required columns: "
-            f"{sorted(missing_columns)}"
+            f"Gold dataframe is missing required columns: {sorted(missing_columns)}"
         )
 
     if df.empty:
-        raise ValueError(
-            "Gold dataframe is empty."
-        )
+        raise ValueError("Gold dataframe is empty.")
 
     periods = (
-        df[
-            ["ano_referencia", "mes_referencia"]
-        ]
+        df[["ano_referencia", "mes_referencia"]]
         .drop_duplicates()
-        .sort_values(
-            ["ano_referencia", "mes_referencia"]
-        )
+        .sort_values(["ano_referencia", "mes_referencia"])
         .reset_index(drop=True)
     )
 
@@ -122,9 +106,7 @@ def _validate_gold_dataframe(
         }
     )
 
-    missing_periods = expected_periods.difference(
-        observed_periods
-    )
+    missing_periods = expected_periods.difference(observed_periods)
 
     if len(missing_periods) > 0:
         raise ValueError(
@@ -132,15 +114,10 @@ def _validate_gold_dataframe(
             f"{missing_periods.strftime('%Y-%m').tolist()}"
         )
 
-    duplicate_rows = int(
-        df.duplicated().sum()
-    )
+    duplicate_rows = int(df.duplicated().sum())
 
     if duplicate_rows > 0:
-        raise ValueError(
-            "Gold contains exact duplicate rows: "
-            f"{duplicate_rows}"
-        )
+        raise ValueError(f"Gold contains exact duplicate rows: {duplicate_rows}")
 
     first_period = (
         int(periods.iloc[0]["ano_referencia"]),
@@ -161,9 +138,7 @@ def _prepare_gold_dataframe(
     gold_df = silver_df.copy()
 
     if "source_index" in gold_df.columns:
-        gold_df = gold_df.drop(
-            columns=["source_index"]
-        )
+        gold_df = gold_df.drop(columns=["source_index"])
 
     preferred_columns = [
         "tipo_veiculo",
@@ -182,9 +157,7 @@ def _prepare_gold_dataframe(
     ]
 
     missing_columns = [
-        column
-        for column in preferred_columns
-        if column not in gold_df.columns
+        column for column in preferred_columns if column not in gold_df.columns
     ]
 
     if missing_columns:
@@ -193,18 +166,20 @@ def _prepare_gold_dataframe(
             f"{missing_columns}"
         )
 
-    gold_df = gold_df[
-        preferred_columns
-    ].sort_values(
-        [
-            "ano_referencia",
-            "mes_referencia",
-            "codigo_fipe",
-            "ano_modelo",
-            "sigla_combustivel",
-        ],
-        na_position="last",
-    ).reset_index(drop=True)
+    gold_df = (
+        gold_df[preferred_columns]
+        .sort_values(
+            [
+                "ano_referencia",
+                "mes_referencia",
+                "codigo_fipe",
+                "ano_modelo",
+                "sigla_combustivel",
+            ],
+            na_position="last",
+        )
+        .reset_index(drop=True)
+    )
 
     return gold_df
 
@@ -218,9 +193,7 @@ def _atomic_write_parquet(
         exist_ok=True,
     )
 
-    temporary_path = destination.with_suffix(
-        destination.suffix + ".part"
-    )
+    temporary_path = destination.with_suffix(destination.suffix + ".part")
 
     if temporary_path.exists():
         temporary_path.unlink()
@@ -273,23 +246,13 @@ def build_gold(
             f"{destination}"
         )
 
-    silver_files = _list_silver_files(
-        silver_dir
-    )
+    silver_files = _list_silver_files(silver_dir)
 
-    silver_df = _read_silver_partitions(
-        silver_files
-    )
+    silver_df = _read_silver_partitions(silver_files)
 
-    gold_df = _prepare_gold_dataframe(
-        silver_df
-    )
+    gold_df = _prepare_gold_dataframe(silver_df)
 
-    first_period, last_period = (
-        _validate_gold_dataframe(
-            gold_df
-        )
-    )
+    first_period, last_period = _validate_gold_dataframe(gold_df)
 
     _atomic_write_parquet(
         gold_df,

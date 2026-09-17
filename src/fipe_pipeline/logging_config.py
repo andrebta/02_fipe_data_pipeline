@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_LOG_DIR = PROJECT_ROOT / "logs"
 DEFAULT_LOG_FILE = DEFAULT_LOG_DIR / "fipe_pipeline.log"
@@ -28,10 +27,7 @@ def configure_logging(
     )
 
     formatter = logging.Formatter(
-        fmt=(
-            "%(asctime)s | %(levelname)s | "
-            "%(name)s | %(message)s"
-        ),
+        fmt=("%(asctime)s | %(levelname)s | %(name)s | %(message)s"),
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 

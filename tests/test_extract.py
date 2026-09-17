@@ -37,9 +37,7 @@ class FakeResponse:
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
-            raise extract_module.requests.HTTPError(
-                f"HTTP {self.status_code}"
-            )
+            raise extract_module.requests.HTTPError(f"HTTP {self.status_code}")
 
     def json(self):
         return self._payload
@@ -80,9 +78,7 @@ def test_build_monthly_destination(tmp_path):
         tmp_path,
     )
 
-    assert destination == (
-        tmp_path / "fipe_2026_09.parquet"
-    )
+    assert destination == (tmp_path / "fipe_2026_09.parquet")
 
 
 def test_list_available_releases_keeps_highest_patch(
@@ -124,9 +120,7 @@ def test_list_available_releases_keeps_highest_patch(
     monkeypatch.setattr(
         extract_module.requests,
         "get",
-        lambda *args, **kwargs: FakeResponse(
-            payload=payload
-        ),
+        lambda *args, **kwargs: FakeResponse(payload=payload),
     )
 
     releases = list_available_releases()
@@ -158,9 +152,7 @@ def test_select_original_asset_prefers_unmerged_exact_name():
         ]
     }
 
-    asset = extract_module._select_original_parquet_asset(
-        metadata
-    )
+    asset = extract_module._select_original_parquet_asset(metadata)
 
     assert asset.name == "fipex-prices-latest.parquet"
     assert asset.download_url == "https://example.test/original"
@@ -183,9 +175,7 @@ def test_select_original_asset_rejects_ambiguous_candidates():
     }
 
     with pytest.raises(ReleaseAssetNotFoundError):
-        extract_module._select_original_parquet_asset(
-            metadata
-        )
+        extract_module._select_original_parquet_asset(metadata)
 
 
 def test_historical_watermark_uses_latest_period(tmp_path):
@@ -202,9 +192,7 @@ def test_historical_watermark_uses_latest_period(tmp_path):
         index=False,
     )
 
-    watermark = get_historical_watermark(
-        historical_dir
-    )
+    watermark = get_historical_watermark(historical_dir)
 
     assert watermark == Period(2026, 8)
 
@@ -223,14 +211,11 @@ def test_list_local_monthly_periods(tmp_path):
                 "mes_referencia": [month, month],
             }
         ).to_parquet(
-            monthly_dir
-            / f"fipe_{year:04d}_{month:02d}.parquet",
+            monthly_dir / f"fipe_{year:04d}_{month:02d}.parquet",
             index=False,
         )
 
-    periods = list_local_monthly_periods(
-        monthly_dir
-    )
+    periods = list_local_monthly_periods(monthly_dir)
 
     assert periods == [
         Period(2026, 9),
@@ -254,12 +239,8 @@ def test_list_local_monthly_periods_rejects_multi_period_file(
         index=False,
     )
 
-    with pytest.raises(
-        extract_module.LocalInventoryError
-    ):
-        list_local_monthly_periods(
-            monthly_dir
-        )
+    with pytest.raises(extract_module.LocalInventoryError):
+        list_local_monthly_periods(monthly_dir)
 
 
 def test_find_missing_periods_respects_historical_and_local():
@@ -280,9 +261,7 @@ def test_find_missing_periods_respects_historical_and_local():
         inventory,
     )
 
-    assert [item.period for item in missing] == [
-        Period(2026, 10)
-    ]
+    assert [item.period for item in missing] == [Period(2026, 10)]
 
 
 def test_remote_gap_detection():
@@ -307,9 +286,7 @@ def test_remote_gap_detection():
 def test_extract_month_existing_file_is_idempotent(
     tmp_path,
 ):
-    destination = (
-        tmp_path / "fipe_2026_09.parquet"
-    )
+    destination = tmp_path / "fipe_2026_09.parquet"
 
     pd.DataFrame(
         {
@@ -337,9 +314,7 @@ def test_extract_month_existing_file_is_idempotent(
 def test_existing_monthly_file_wrong_period_is_rejected(
     tmp_path,
 ):
-    destination = (
-        tmp_path / "fipe_2026_09.parquet"
-    )
+    destination = tmp_path / "fipe_2026_09.parquet"
 
     pd.DataFrame(
         {
@@ -419,21 +394,13 @@ def test_extract_month_downloads_filters_and_cleans_temp_files(
     assert result.rows == 2
     assert result.destination.exists()
 
-    persisted = pd.read_parquet(
-        result.destination
-    )
+    persisted = pd.read_parquet(result.destination)
 
-    assert set(
-        persisted["mes_referencia"].unique()
-    ) == {9}
+    assert set(persisted["mes_referencia"].unique()) == {9}
 
-    assert not result.destination.with_suffix(
-        ".snapshot.part"
-    ).exists()
+    assert not result.destination.with_suffix(".snapshot.part").exists()
 
-    assert not result.destination.with_suffix(
-        ".monthly.part"
-    ).exists()
+    assert not result.destination.with_suffix(".monthly.part").exists()
 
 
 def test_extract_missing_months_only_processes_missing_release(
@@ -475,13 +442,9 @@ def test_extract_missing_months_only_processes_missing_release(
         timeout,
         chunk_size,
     ):
-        calls.append(
-            (year, month, patch, overwrite)
-        )
+        calls.append((year, month, patch, overwrite))
 
-        destination = Path(
-            destination_dir
-        ) / f"fipe_{year:04d}_{month:02d}.parquet"
+        destination = Path(destination_dir) / f"fipe_{year:04d}_{month:02d}.parquet"
 
         return extract_module.ExtractionResult(
             year=year,
@@ -511,14 +474,8 @@ def test_extract_missing_months_only_processes_missing_release(
         monthly_dir=tmp_path / "monthly",
     )
 
-    assert result.missing_periods == (
-        Period(2026, 10),
-    )
+    assert result.missing_periods == (Period(2026, 10),)
 
-    assert calls == [
-        (2026, 10, 1, False)
-    ]
+    assert calls == [(2026, 10, 1, False)]
 
-    assert len(
-        result.extraction_results
-    ) == 1
+    assert len(result.extraction_results) == 1

@@ -9,7 +9,6 @@ from typing import Any, Iterable
 import pandas as pd
 import requests
 
-
 GITHUB_OWNER = "fipex-labs"
 GITHUB_REPO = "dataset"
 GITHUB_API_BASE_URL = "https://api.github.com"
@@ -161,9 +160,7 @@ def list_available_releases(
 ) -> list[ReleaseInfo]:
     """List published monthly FIPEX releases, keeping the highest patch per period."""
 
-    endpoint = (
-        f"{GITHUB_API_BASE_URL}/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases"
-    )
+    endpoint = f"{GITHUB_API_BASE_URL}/repos/{GITHUB_OWNER}/{GITHUB_REPO}/releases"
     page = 1
     releases_by_period: dict[Period, ReleaseInfo] = {}
 
@@ -459,9 +456,7 @@ def list_local_monthly_periods(
             )
 
         row = unique_periods.iloc[0]
-        periods.append(
-            Period(int(row["ano_referencia"]), int(row["mes_referencia"]))
-        )
+        periods.append(Period(int(row["ano_referencia"]), int(row["mes_referencia"])))
 
     return sorted(set(periods))
 

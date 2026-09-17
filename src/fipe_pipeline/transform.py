@@ -31,9 +31,7 @@ class TransformResult:
 
 def _ensure_required_columns(df: pd.DataFrame) -> None:
     missing_columns = [
-        column
-        for column in REQUIRED_COLUMNS
-        if column not in df.columns
+        column for column in REQUIRED_COLUMNS if column not in df.columns
     ]
 
     if missing_columns:
@@ -89,55 +87,36 @@ def _build_quarantine_reasons(
             reasons.at[index] = [*reasons.at[index], rule]
 
     structural_columns = [
-        column
-        for column in REQUIRED_COLUMNS
-        if column != "ano_modelo"
+        column for column in REQUIRED_COLUMNS if column != "ano_modelo"
     ]
 
-    unexpected_null_mask = (
-        df[structural_columns]
-        .isna()
-        .any(axis=1)
-    )
+    unexpected_null_mask = df[structural_columns].isna().any(axis=1)
     add_reason(unexpected_null_mask, "DQ-NULL-001")
 
-    zero_km_model_year_mask = (
-        (df["zero_km"] & df["ano_modelo"].notna())
-        | (~df["zero_km"] & df["ano_modelo"].isna())
+    zero_km_model_year_mask = (df["zero_km"] & df["ano_modelo"].notna()) | (
+        ~df["zero_km"] & df["ano_modelo"].isna()
     )
     add_reason(zero_km_model_year_mask, "DQ-NULL-002")
 
-    invalid_month_mask = (
-        df["mes_referencia"].isna()
-        | ~df["mes_referencia"].between(1, 12)
+    invalid_month_mask = df["mes_referencia"].isna() | ~df["mes_referencia"].between(
+        1, 12
     )
     add_reason(invalid_month_mask, "DQ-TIME-001")
 
-    invalid_model_year_mask = (
-        df["ano_modelo"].notna()
-        & (
-            df["ano_modelo"]
-            > df["ano_referencia"] + 1
-        )
+    invalid_model_year_mask = df["ano_modelo"].notna() & (
+        df["ano_modelo"] > df["ano_referencia"] + 1
     )
     add_reason(invalid_model_year_mask, "DQ-TIME-002")
 
     valid_fipe_mask = (
-        df["codigo_fipe"]
-        .astype("string")
-        .str.fullmatch(r"\d{6}-\d", na=False)
+        df["codigo_fipe"].astype("string").str.fullmatch(r"\d{6}-\d", na=False)
     )
     add_reason(~valid_fipe_mask, "DQ-CODE-001")
 
-    invalid_price_mask = (
-        df["valor_centavos"].isna()
-        | (df["valor_centavos"] <= 0)
-    )
+    invalid_price_mask = df["valor_centavos"].isna() | (df["valor_centavos"] <= 0)
     add_reason(invalid_price_mask, "DQ-PRICE-001")
 
-    formatted_centavos = _parse_valor_formatado_to_centavos(
-        df["valor_formatado"]
-    )
+    formatted_centavos = _parse_valor_formatado_to_centavos(df["valor_formatado"])
 
     invalid_formatted_price_mask = (
         formatted_centavos.isna()
@@ -149,30 +128,20 @@ def _build_quarantine_reasons(
         "DQ-PRICE-002",
     )
 
-    fuel_mapping_counts = (
-        df.groupby(
-            "sigla_combustivel",
-            dropna=False,
-        )["nome_combustivel"]
-        .nunique(dropna=False)
-    )
+    fuel_mapping_counts = df.groupby(
+        "sigla_combustivel",
+        dropna=False,
+    )["nome_combustivel"].nunique(dropna=False)
 
-    invalid_fuel_codes = fuel_mapping_counts[
-        fuel_mapping_counts > 1
-    ].index
+    invalid_fuel_codes = fuel_mapping_counts[fuel_mapping_counts > 1].index
 
-    invalid_fuel_mapping_mask = (
-        df["sigla_combustivel"]
-        .isin(invalid_fuel_codes)
-    )
+    invalid_fuel_mapping_mask = df["sigla_combustivel"].isin(invalid_fuel_codes)
     add_reason(
         invalid_fuel_mapping_mask,
         "DQ-FUEL-001",
     )
 
-    return reasons.apply(
-        lambda values: "|".join(values)
-    )
+    return reasons.apply(lambda values: "|".join(values))
 
 
 def _add_grain_collision_reason(
@@ -191,14 +160,8 @@ def _add_grain_collision_reason(
         keep=False,
     )
 
-    for index in grain_collision_mask[
-        grain_collision_mask
-    ].index:
-        current_reasons = (
-            reasons.at[index].split("|")
-            if reasons.at[index]
-            else []
-        )
+    for index in grain_collision_mask[grain_collision_mask].index:
+        current_reasons = reasons.at[index].split("|") if reasons.at[index] else []
 
         if "DQ-GRAIN-001" not in current_reasons:
             current_reasons.append("DQ-GRAIN-001")
@@ -313,9 +276,7 @@ def transform_bronze_to_silver(
     )
 
     comparison_columns = [
-        column
-        for column in working_df.columns
-        if column != "source_index"
+        column for column in working_df.columns if column != "source_index"
     ]
 
     duplicate_copy_mask = working_df.duplicated(
@@ -323,25 +284,16 @@ def transform_bronze_to_silver(
         keep="first",
     )
 
-    duplicates = (
-        working_df.loc[duplicate_copy_mask]
-        .copy()
-        .reset_index(drop=True)
-    )
+    duplicates = working_df.loc[duplicate_copy_mask].copy().reset_index(drop=True)
 
     duplicates = _add_duplicate_audit_metadata(
         duplicates,
         processed_at,
     )
 
-    deduplicated_df = (
-        working_df.loc[~duplicate_copy_mask]
-        .copy()
-    )
+    deduplicated_df = working_df.loc[~duplicate_copy_mask].copy()
 
-    reasons = _build_quarantine_reasons(
-        deduplicated_df
-    )
+    reasons = _build_quarantine_reasons(deduplicated_df)
 
     reasons = _add_grain_collision_reason(
         deduplicated_df,
@@ -350,14 +302,9 @@ def transform_bronze_to_silver(
 
     quarantine_mask = reasons.ne("")
 
-    quarantine = (
-        deduplicated_df.loc[quarantine_mask]
-        .copy()
-    )
+    quarantine = deduplicated_df.loc[quarantine_mask].copy()
 
-    quarantine["dq_reasons"] = reasons.loc[
-        quarantine_mask
-    ]
+    quarantine["dq_reasons"] = reasons.loc[quarantine_mask]
 
     quarantine = _add_quarantine_audit_metadata(
         quarantine,
@@ -366,14 +313,9 @@ def transform_bronze_to_silver(
 
     quarantine = quarantine.reset_index(drop=True)
 
-    silver = (
-        deduplicated_df.loc[~quarantine_mask]
-        .copy()
-    )
+    silver = deduplicated_df.loc[~quarantine_mask].copy()
 
-    silver = _standardize_silver_types(
-        silver
-    )
+    silver = _standardize_silver_types(silver)
 
     silver = silver.reset_index(drop=True)
 

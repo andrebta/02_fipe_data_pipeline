@@ -7,24 +7,13 @@ import duckdb
 
 from fipe_pipeline.analytics_views import create_analytics_views
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 DEFAULT_DUCKDB_PATH = PROJECT_ROOT / "data" / "fipe.duckdb"
 DEFAULT_SILVER_GLOB = (
-    PROJECT_ROOT
-    / "data"
-    / "silver"
-    / "year=*"
-    / "month=*"
-    / "fipe.parquet"
+    PROJECT_ROOT / "data" / "silver" / "year=*" / "month=*" / "fipe.parquet"
 )
-DEFAULT_GOLD_PATH = (
-    PROJECT_ROOT
-    / "data"
-    / "gold"
-    / "fipe_prices.parquet"
-)
+DEFAULT_GOLD_PATH = PROJECT_ROOT / "data" / "gold" / "fipe_prices.parquet"
 
 
 @dataclass(frozen=True)
@@ -54,9 +43,7 @@ def connect_duckdb(
         exist_ok=True,
     )
 
-    return duckdb.connect(
-        str(database_path)
-    )
+    return duckdb.connect(str(database_path))
 
 
 def register_parquet_views(
@@ -69,17 +56,11 @@ def register_parquet_views(
     gold_path = Path(gold_path)
 
     if not gold_path.exists():
-        raise FileNotFoundError(
-            f"Gold dataset not found: {gold_path}"
-        )
+        raise FileNotFoundError(f"Gold dataset not found: {gold_path}")
 
-    silver_pattern = str(
-        silver_glob
-    ).replace("\\", "/")
+    silver_pattern = str(silver_glob).replace("\\", "/")
 
-    gold_file = str(
-        gold_path
-    ).replace("\\", "/")
+    gold_file = str(gold_path).replace("\\", "/")
 
     connection.execute(
         f"""
@@ -145,12 +126,8 @@ def validate_duckdb_layer(
         """
     ).fetchone()
 
-    silver_rows = int(
-        silver_summary[0]
-    )
-    gold_rows = int(
-        gold_summary[0]
-    )
+    silver_rows = int(silver_summary[0])
+    gold_rows = int(gold_summary[0])
 
     silver_first = silver_summary[1]
     silver_last = silver_summary[2]
@@ -180,18 +157,14 @@ def validate_duckdb_layer(
     return DuckDBValidationResult(
         silver_rows=silver_rows,
         gold_rows=gold_rows,
-        row_counts_match=(
-            silver_rows == gold_rows
-        ),
+        row_counts_match=(silver_rows == gold_rows),
         silver_first_period=silver_first_period,
         silver_last_period=silver_last_period,
         gold_first_period=gold_first_period,
         gold_last_period=gold_last_period,
         periods_match=(
-            silver_first_period
-            == gold_first_period
-            and silver_last_period
-            == gold_last_period
+            silver_first_period == gold_first_period
+            and silver_last_period == gold_last_period
         ),
     )
 
@@ -213,13 +186,9 @@ def build_duckdb_catalog(
     5. closes the connection safely.
     """
 
-    database_path = Path(
-        database_path
-    )
+    database_path = Path(database_path)
 
-    connection = connect_duckdb(
-        database_path
-    )
+    connection = connect_duckdb(database_path)
 
     try:
         register_parquet_views(
@@ -228,18 +197,13 @@ def build_duckdb_catalog(
             gold_path=gold_path,
         )
 
-        create_analytics_views(
-            connection
-        )
+        create_analytics_views(connection)
 
-        validation = validate_duckdb_layer(
-            connection
-        )
+        validation = validate_duckdb_layer(connection)
 
         if not validation.row_counts_match:
             raise ValueError(
-                "DuckDB validation failed: Silver and Gold "
-                "row counts do not match."
+                "DuckDB validation failed: Silver and Gold row counts do not match."
             )
 
         if not validation.periods_match:

@@ -33,7 +33,6 @@ from fipe_pipeline.transform import (
 )
 from fipe_pipeline.validate import run_validations
 
-
 LOGGER = logging.getLogger(__name__)
 
 
@@ -65,25 +64,19 @@ def _period_from_dataframe(
         "mes_referencia",
     }
 
-    missing = required.difference(
-        df.columns
-    )
+    missing = required.difference(df.columns)
 
     if missing:
         raise ValueError(
-            "Bronze dataframe is missing period columns: "
-            f"{sorted(missing)}"
+            f"Bronze dataframe is missing period columns: {sorted(missing)}"
         )
 
-    periods = (
-        df[
-            [
-                "ano_referencia",
-                "mes_referencia",
-            ]
+    periods = df[
+        [
+            "ano_referencia",
+            "mes_referencia",
         ]
-        .drop_duplicates()
-    )
+    ].drop_duplicates()
 
     if len(periods) != 1:
         raise ValueError(
@@ -102,20 +95,14 @@ def _period_from_dataframe(
 def _list_bronze_monthly_files(
     bronze_monthly_dir: Path | str = DEFAULT_BRONZE_MONTHLY_DIR,
 ) -> dict[Period, Path]:
-    bronze_monthly_dir = Path(
-        bronze_monthly_dir
-    )
+    bronze_monthly_dir = Path(bronze_monthly_dir)
 
     if not bronze_monthly_dir.exists():
         return {}
 
     result: dict[Period, Path] = {}
 
-    for path in sorted(
-        bronze_monthly_dir.glob(
-            "fipe_*.parquet"
-        )
-    ):
+    for path in sorted(bronze_monthly_dir.glob("fipe_*.parquet")):
         try:
             period_df = pd.read_parquet(
                 path,
@@ -126,13 +113,10 @@ def _list_bronze_monthly_files(
             )
         except Exception as exc:
             raise RuntimeError(
-                "Could not inspect Bronze monthly file: "
-                f"{path}"
+                f"Could not inspect Bronze monthly file: {path}"
             ) from exc
 
-        period = _period_from_dataframe(
-            period_df
-        )
+        period = _period_from_dataframe(period_df)
 
         if period in result:
             raise RuntimeError(
@@ -149,20 +133,14 @@ def _list_bronze_monthly_files(
 def _list_silver_periods(
     silver_dir: Path | str = DEFAULT_SILVER_DIR,
 ) -> set[Period]:
-    silver_dir = Path(
-        silver_dir
-    )
+    silver_dir = Path(silver_dir)
 
     if not silver_dir.exists():
         return set()
 
     periods: set[Period] = set()
 
-    for path in sorted(
-        silver_dir.glob(
-            "year=*/month=*/fipe.parquet"
-        )
-    ):
+    for path in sorted(silver_dir.glob("year=*/month=*/fipe.parquet")):
         try:
             period_df = pd.read_parquet(
                 path,
@@ -172,19 +150,13 @@ def _list_silver_periods(
                 ],
             )
         except Exception as exc:
-            raise RuntimeError(
-                "Could not inspect Silver partition: "
-                f"{path}"
-            ) from exc
+            raise RuntimeError(f"Could not inspect Silver partition: {path}") from exc
 
-        period = _period_from_dataframe(
-            period_df
-        )
+        period = _period_from_dataframe(period_df)
 
         if period in periods:
             raise RuntimeError(
-                "Duplicate Silver partition detected for "
-                f"{period.label}."
+                f"Duplicate Silver partition detected for {period.label}."
             )
 
         periods.add(period)
@@ -197,17 +169,13 @@ def _raise_on_pipeline_blocking_rules(
     period: Period,
 ) -> None:
     blocking = validation_report.loc[
-        validation_report[
-            "effective_action"
-        ].eq("FAIL_PIPELINE")
+        validation_report["effective_action"].eq("FAIL_PIPELINE")
     ]
 
     if blocking.empty:
         return
 
-    rules = blocking[
-        "rule"
-    ].tolist()
+    rules = blocking["rule"].tolist()
 
     LOGGER.error(
         "Pipeline-blocking rules failed for %s: %s",
@@ -216,8 +184,7 @@ def _raise_on_pipeline_blocking_rules(
     )
 
     raise RuntimeError(
-        "Pipeline-blocking data-quality rules failed for "
-        f"{period.label}: {rules}"
+        f"Pipeline-blocking data-quality rules failed for {period.label}: {rules}"
     )
 
 
@@ -229,9 +196,7 @@ def _summarize_failed_rules(
         "rule",
     ].tolist()
 
-    return tuple(
-        failed
-    )
+    return tuple(failed)
 
 
 def process_monthly_bronze(
@@ -239,40 +204,30 @@ def process_monthly_bronze(
     *,
     silver_dir: Path | str = DEFAULT_SILVER_DIR,
 ) -> MonthlyPipelineResult:
-    bronze_path = Path(
-        bronze_path
-    )
+    bronze_path = Path(bronze_path)
 
     LOGGER.info(
         "Processing Bronze monthly file: %s",
         bronze_path,
     )
 
-    df = pd.read_parquet(
-        bronze_path
-    )
+    df = pd.read_parquet(bronze_path)
 
-    period = _period_from_dataframe(
-        df
-    )
+    period = _period_from_dataframe(df)
 
     LOGGER.info(
         "Running data-quality validations for %s",
         period.label,
     )
 
-    validation_report = run_validations(
-        df
-    )
+    validation_report = run_validations(df)
 
     _raise_on_pipeline_blocking_rules(
         validation_report,
         period,
     )
 
-    failed_rules = _summarize_failed_rules(
-        validation_report
-    )
+    failed_rules = _summarize_failed_rules(validation_report)
 
     if failed_rules:
         LOGGER.warning(
@@ -286,13 +241,10 @@ def process_monthly_bronze(
             period.label,
         )
 
-    transform_result: TransformResult = (
-        transform_bronze_to_silver(df)
-    )
+    transform_result: TransformResult = transform_bronze_to_silver(df)
 
     LOGGER.info(
-        "Transformation result for %s: "
-        "silver=%s quarantine=%s duplicates=%s",
+        "Transformation result for %s: silver=%s quarantine=%s duplicates=%s",
         period.label,
         len(transform_result.silver),
         len(transform_result.quarantine),
@@ -314,19 +266,11 @@ def process_monthly_bronze(
     return MonthlyPipelineResult(
         period=period,
         bronze_path=bronze_path,
-        validation_passed=(
-            len(failed_rules) == 0
-        ),
+        validation_passed=(len(failed_rules) == 0),
         failed_rules=failed_rules,
-        silver_rows=len(
-            transform_result.silver
-        ),
-        quarantine_rows=len(
-            transform_result.quarantine
-        ),
-        duplicate_rows=len(
-            transform_result.duplicates
-        ),
+        silver_rows=len(transform_result.silver),
+        quarantine_rows=len(transform_result.quarantine),
+        duplicate_rows=len(transform_result.duplicates),
         load_result=load_result,
     )
 
@@ -340,9 +284,7 @@ def run_pipeline(
     rebuild_gold: bool = True,
     refresh_duckdb: bool = True,
 ) -> PipelineRunResult:
-    LOGGER.info(
-        "Starting incremental FIPE pipeline."
-    )
+    LOGGER.info("Starting incremental FIPE pipeline.")
 
     catchup_result = extract_missing_months(
         monthly_dir=bronze_monthly_dir,
@@ -353,40 +295,26 @@ def run_pipeline(
             "Downloaded Bronze months: %s",
             [
                 f"{result.year:04d}-{result.month:02d}"
-                for result
-                in catchup_result.extraction_results
+                for result in catchup_result.extraction_results
             ],
         )
     else:
-        LOGGER.info(
-            "No missing Bronze months to download."
-        )
+        LOGGER.info("No missing Bronze months to download.")
 
-    bronze_files = _list_bronze_monthly_files(
-        bronze_monthly_dir
-    )
+    bronze_files = _list_bronze_monthly_files(bronze_monthly_dir)
 
-    silver_periods = _list_silver_periods(
-        silver_dir
-    )
+    silver_periods = _list_silver_periods(silver_dir)
 
     pending_periods = sorted(
-        period
-        for period in bronze_files
-        if period not in silver_periods
+        period for period in bronze_files if period not in silver_periods
     )
 
     LOGGER.info(
         "Pending Bronze months for Silver processing: %s",
-        [
-            period.label
-            for period in pending_periods
-        ],
+        [period.label for period in pending_periods],
     )
 
-    processed_results: list[
-        MonthlyPipelineResult
-    ] = []
+    processed_results: list[MonthlyPipelineResult] = []
 
     for period in pending_periods:
         result = process_monthly_bronze(
@@ -394,29 +322,19 @@ def run_pipeline(
             silver_dir=silver_dir,
         )
 
-        processed_results.append(
-            result
-        )
+        processed_results.append(result)
 
     gold_result: GoldBuildResult | None = None
     duckdb_result: DuckDBBuildResult | None = None
 
-    gold_path = Path(
-        gold_path
-    )
+    gold_path = Path(gold_path)
 
-    should_build_gold = (
-        rebuild_gold
-        and (
-            bool(processed_results)
-            or not gold_path.exists()
-        )
+    should_build_gold = rebuild_gold and (
+        bool(processed_results) or not gold_path.exists()
     )
 
     if should_build_gold:
-        LOGGER.info(
-            "Building consolidated Gold dataset."
-        )
+        LOGGER.info("Building consolidated Gold dataset.")
 
         gold_result = build_gold(
             silver_dir=silver_dir,
@@ -425,40 +343,24 @@ def run_pipeline(
         )
 
         LOGGER.info(
-            "Gold build completed: "
-            "rows=%s partitions=%s destination=%s",
+            "Gold build completed: rows=%s partitions=%s destination=%s",
             gold_result.rows,
             gold_result.source_partitions,
             gold_result.destination,
         )
     else:
-        LOGGER.info(
-            "Gold rebuild not required."
-        )
+        LOGGER.info("Gold rebuild not required.")
 
-    duckdb_path = Path(
-        duckdb_path
-    )
+    duckdb_path = Path(duckdb_path)
 
-    should_refresh_duckdb = (
-        refresh_duckdb
-        and (
-            gold_result is not None
-            or not duckdb_path.exists()
-        )
+    should_refresh_duckdb = refresh_duckdb and (
+        gold_result is not None or not duckdb_path.exists()
     )
 
     if should_refresh_duckdb:
-        LOGGER.info(
-            "Refreshing DuckDB analytical catalog."
-        )
+        LOGGER.info("Refreshing DuckDB analytical catalog.")
 
-        silver_glob = (
-            Path(silver_dir)
-            / "year=*"
-            / "month=*"
-            / "fipe.parquet"
-        )
+        silver_glob = Path(silver_dir) / "year=*" / "month=*" / "fipe.parquet"
 
         duckdb_result = build_duckdb_catalog(
             database_path=duckdb_path,
@@ -476,31 +378,21 @@ def run_pipeline(
             duckdb_result.validation.gold_last_period,
         )
     else:
-        LOGGER.info(
-            "DuckDB catalog refresh not required."
-        )
+        LOGGER.info("DuckDB catalog refresh not required.")
 
     LOGGER.info(
         "Incremental FIPE pipeline completed. "
         "extracted=%s processed=%s "
         "gold_rebuilt=%s duckdb_refreshed=%s",
-        len(
-            catchup_result.extraction_results
-        ),
-        len(
-            processed_results
-        ),
+        len(catchup_result.extraction_results),
+        len(processed_results),
         gold_result is not None,
         duckdb_result is not None,
     )
 
     return PipelineRunResult(
-        extracted_months=tuple(
-            catchup_result.extraction_results
-        ),
-        processed_months=tuple(
-            processed_results
-        ),
+        extracted_months=tuple(catchup_result.extraction_results),
+        processed_months=tuple(processed_results),
         gold_result=gold_result,
         duckdb_result=duckdb_result,
     )

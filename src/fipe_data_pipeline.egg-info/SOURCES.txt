@@ -7,6 +7,8 @@ src/fipe_data_pipeline.egg-info/requires.txt
 src/fipe_data_pipeline.egg-info/top_level.txt
 src/fipe_pipeline/__init__.py
 src/fipe_pipeline/__main__.py
+src/fipe_pipeline/analytics_views.py
+src/fipe_pipeline/duckdb_layer.py
 src/fipe_pipeline/extract.py
 src/fipe_pipeline/gold.py
 src/fipe_pipeline/load.py
@@ -14,6 +16,8 @@ src/fipe_pipeline/logging_config.py
 src/fipe_pipeline/pipeline.py
 src/fipe_pipeline/transform.py
 src/fipe_pipeline/validate.py
+tests/test_analytics_views.py
+tests/test_duckdb_layer.py
 tests/test_extract.py
 tests/test_gold.py
 tests/test_load.py
