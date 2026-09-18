@@ -14,6 +14,7 @@ The project is designed as a portfolio-grade Data Engineering workflow with emph
 - automated tests;
 - command-line execution;
 - observability through logging;
+- code quality with Ruff;
 - CI with GitHub Actions.
 
 The current local dataset covers **January 2001 through September 2026**.
@@ -638,13 +639,20 @@ pip install -e ".[dev]"
 
 Dependencies are declared in `pyproject.toml`.
 
-Main runtime dependencies include:
+Runtime dependencies include:
 
 ```text
 pandas
 pyarrow
 requests
 duckdb
+```
+
+Development dependencies include:
+
+```text
+pytest
+ruff
 ```
 
 ---
@@ -719,7 +727,44 @@ Coverage includes:
 
 ---
 
-## 15. Continuous Integration
+## 15. Code Quality with Ruff
+
+Ruff is used for linting, import validation, and formatting checks.
+
+Configuration is stored in:
+
+```text
+pyproject.toml
+```
+
+Local checks:
+
+```bash
+ruff check .
+```
+
+```bash
+ruff format --check .
+```
+
+Automatic fixes:
+
+```bash
+ruff check . --fix
+ruff format .
+```
+
+The configured lint families include:
+
+```text
+E -> style errors
+F -> Python / unused import / undefined name issues
+I -> import ordering
+```
+
+---
+
+## 16. Continuous Integration
 
 GitHub Actions workflow:
 
@@ -734,27 +779,41 @@ push -> main
 pull request -> main
 ```
 
-The test suite is executed on:
+The workflow has two stages.
+
+### Code quality
+
+Runs on Python 3.11:
+
+```text
+checkout repository
+-> install project + dev dependencies
+-> ruff check .
+-> ruff format --check .
+```
+
+### Automated tests
+
+Runs after the quality stage succeeds:
 
 ```text
 Python 3.11
 Python 3.12
 ```
 
-The workflow:
+Flow:
 
 ```text
 checkout repository
--> set up Python
 -> install project + dev dependencies
 -> pytest -v
 ```
 
-This verifies that the project works in a clean Linux environment independent of the local development machine.
+This verifies both software quality and functional correctness in a clean Linux environment independent of the local development machine.
 
 ---
 
-## 16. Logging
+## 17. Logging
 
 Logs are written to:
 
@@ -774,7 +833,7 @@ Example:
 
 ---
 
-## 17. DuckDB and SQL
+## 18. DuckDB and SQL
 
 DuckDB is used as the analytical SQL engine over the existing Parquet architecture.
 
@@ -818,7 +877,7 @@ LIMIT 12;
 
 ---
 
-## 18. Current SQL Findings
+## 19. Current SQL Findings
 
 Examples from the September 2026 analytical layer:
 
@@ -844,7 +903,7 @@ These metrics are analytical outputs, not validation rules.
 
 ---
 
-## 19. Storage Strategy
+## 20. Storage Strategy
 
 Parquet provides:
 
@@ -867,7 +926,7 @@ DuckDB provides SQL semantics over both without replacing Parquet as the primary
 
 ---
 
-## 20. Design Decisions
+## 21. Design Decisions
 
 ### Original source asset
 
@@ -899,7 +958,7 @@ SQL was introduced where it provides real analytical value rather than being add
 
 ---
 
-## 21. Reproducibility and Operational Safety
+## 22. Reproducibility and Operational Safety
 
 Implemented safeguards include:
 
@@ -913,12 +972,13 @@ Implemented safeguards include:
 - idempotent CLI execution;
 - persistent logs;
 - automated pytest suite;
+- Ruff linting and formatting checks;
 - GitHub Actions CI;
 - DuckDB Silver/Gold reconciliation.
 
 ---
 
-## 22. Data Files and Git
+## 23. Data Files and Git
 
 Generated datasets and runtime artifacts are not committed.
 
@@ -932,13 +992,14 @@ data/quarantine/
 data/*.duckdb
 data/*.duckdb.wal
 logs/
+.ruff_cache/
 ```
 
 The repository stores source code, documentation, notebooks, tests, and CI configuration.
 
 ---
 
-## 23. Documentation
+## 24. Documentation
 
 Additional documentation:
 
@@ -953,7 +1014,7 @@ The DQ document is synchronized with the currently implemented rule IDs, severit
 
 ---
 
-## 24. Tech Stack
+## 25. Tech Stack
 
 ```text
 Python
@@ -965,6 +1026,7 @@ GitHub Releases API
 DuckDB
 SQL
 Pytest
+Ruff
 GitHub Actions
 Power BI
 Git / GitHub
@@ -972,7 +1034,7 @@ Git / GitHub
 
 ---
 
-## 25. Roadmap
+## 26. Roadmap
 
 Potential next steps:
 
@@ -980,14 +1042,13 @@ Potential next steps:
 - Power BI integration with Gold/DuckDB outputs;
 - pipeline run manifests and execution metadata;
 - test coverage reporting;
-- linting/static analysis in CI;
 - scheduling/orchestration;
-- Dockerized execution;
-- cloud object storage adaptation.
+- cloud object storage adaptation;
+- Docker/containerization if deployment requirements justify it.
 
 ---
 
-## 26. Project Status
+## 27. Project Status
 
 ```text
 Historical bootstrap:       complete
@@ -1001,6 +1062,7 @@ Reusable SQL views:         complete
 Logging:                    complete
 CLI entrypoint:             complete
 Automated tests:            complete
+Ruff code quality checks:   complete
 GitHub Actions CI:          complete
 ```
 
@@ -1008,6 +1070,14 @@ Primary commands:
 
 ```bash
 python -m fipe_pipeline
+```
+
+```bash
+ruff check .
+```
+
+```bash
+ruff format --check .
 ```
 
 ```bash
