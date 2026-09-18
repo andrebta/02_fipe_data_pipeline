@@ -33,16 +33,20 @@ def _gold_row(
     code: str,
     year: int,
     month: int,
+    model_year: int | None = 2025,
+    fuel_code: str = "g",
+    fuel_name: str = "Gasolina",
+    zero_km: bool = False,
 ) -> dict:
     return {
         "tipo_veiculo": "carro",
         "codigo_fipe": code,
         "nome_modelo": f"Modelo {code}",
         "nome_marca": "Marca",
-        "nome_combustivel": "Gasolina",
-        "sigla_combustivel": "g",
-        "ano_modelo": 2025,
-        "zero_km": False,
+        "nome_combustivel": fuel_name,
+        "sigla_combustivel": fuel_code,
+        "ano_modelo": model_year,
+        "zero_km": zero_km,
         "valor_centavos": 100_000_00,
         "valor_formatado": "R$ 100.000,00",
         "mes_referencia": month,
@@ -56,7 +60,7 @@ def _gold_row(
     }
 
 
-def test_build_gold_consolidates_partitions(tmp_path):
+def test_build_gold_consolidates_partitions_and_adds_vehicle_key(tmp_path):
     silver = tmp_path / "silver"
     gold_path = tmp_path / "gold" / "fipe_prices.parquet"
 
@@ -72,14 +76,13 @@ def test_build_gold_consolidates_partitions(tmp_path):
             )
         ],
     )
-
     _write_silver_partition(
         silver,
         year=2026,
         month=9,
         rows=[
             _gold_row(
-                code="001002-0",
+                code="001001-1",
                 year=2026,
                 month=9,
             )
@@ -100,7 +103,87 @@ def test_build_gold_consolidates_partitions(tmp_path):
     gold = pd.read_parquet(gold_path)
 
     assert "source_index" not in gold.columns
+    assert "vehicle_key" in gold.columns
     assert len(gold) == 2
+    assert gold["vehicle_key"].nunique() == 1
+    assert gold["vehicle_key"].iloc[0] == "001001-1|2025|g"
+
+
+def test_vehicle_key_distinguishes_model_year_and_fuel(tmp_path):
+    silver = tmp_path / "silver"
+    destination = tmp_path / "gold" / "fipe_prices.parquet"
+
+    _write_silver_partition(
+        silver,
+        year=2026,
+        month=9,
+        rows=[
+            _gold_row(
+                code="001001-1",
+                year=2026,
+                month=9,
+                model_year=2024,
+                fuel_code="g",
+            ),
+            _gold_row(
+                code="001001-1",
+                year=2026,
+                month=9,
+                model_year=2025,
+                fuel_code="g",
+            ),
+            _gold_row(
+                code="001001-1",
+                year=2026,
+                month=9,
+                model_year=2025,
+                fuel_code="f",
+                fuel_name="Flex",
+            ),
+        ],
+    )
+
+    build_gold(
+        silver_dir=silver,
+        destination=destination,
+    )
+
+    gold = pd.read_parquet(destination)
+
+    assert set(gold["vehicle_key"]) == {
+        "001001-1|2024|g",
+        "001001-1|2025|g",
+        "001001-1|2025|f",
+    }
+
+
+def test_vehicle_key_uses_zero_km_token_for_null_model_year(tmp_path):
+    silver = tmp_path / "silver"
+    destination = tmp_path / "gold" / "fipe_prices.parquet"
+
+    _write_silver_partition(
+        silver,
+        year=2026,
+        month=9,
+        rows=[
+            _gold_row(
+                code="001001-1",
+                year=2026,
+                month=9,
+                model_year=None,
+                zero_km=True,
+            )
+        ],
+    )
+
+    build_gold(
+        silver_dir=silver,
+        destination=destination,
+    )
+
+    gold = pd.read_parquet(destination)
+
+    assert gold.loc[0, "vehicle_key"] == "001001-1|ZERO_KM|g"
 
 
 def test_build_gold_rejects_temporal_gap(tmp_path):

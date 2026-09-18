@@ -13,11 +13,52 @@ def create_analytics_views(
         register_parquet_views(connection)
 
     Views created:
+        vw_dim_vehicle
         vw_monthly_market_summary
         vw_latest_brand_summary
         vw_latest_fuel_mix
         vw_vehicle_type_summary
     """
+
+    connection.execute(
+        """
+        CREATE OR REPLACE VIEW vw_dim_vehicle AS
+        WITH ranked_vehicle_labels AS (
+            SELECT
+                vehicle_key,
+                tipo_veiculo,
+                codigo_fipe,
+                nome_modelo,
+                nome_marca,
+                nome_combustivel,
+                sigla_combustivel,
+                ano_modelo,
+                zero_km,
+                data_referencia,
+                ROW_NUMBER() OVER (
+                    PARTITION BY vehicle_key
+                    ORDER BY
+                        data_referencia DESC,
+                        nome_marca,
+                        nome_modelo
+                ) AS row_number
+            FROM gold_fipe
+        )
+        SELECT
+            vehicle_key,
+            tipo_veiculo,
+            codigo_fipe,
+            nome_modelo,
+            nome_marca,
+            nome_combustivel,
+            sigla_combustivel,
+            ano_modelo,
+            zero_km,
+            data_referencia AS latest_label_reference
+        FROM ranked_vehicle_labels
+        WHERE row_number = 1
+        """
+    )
 
     connection.execute(
         """
@@ -27,6 +68,7 @@ def create_analytics_views(
             ano_referencia,
             mes_referencia,
             COUNT(*) AS rows,
+            COUNT(DISTINCT vehicle_key) AS distinct_vehicles,
             COUNT(DISTINCT codigo_fipe) AS distinct_fipe_codes,
             MEDIAN(valor_centavos) / 100.0 AS median_price_brl
         FROM gold_fipe
@@ -49,6 +91,7 @@ def create_analytics_views(
         SELECT
             nome_marca,
             COUNT(*) AS rows,
+            COUNT(DISTINCT vehicle_key) AS distinct_vehicles,
             COUNT(DISTINCT codigo_fipe) AS distinct_fipe_codes,
             MEDIAN(valor_centavos) / 100.0 AS median_price_brl,
             MIN(valor_centavos) / 100.0 AS min_price_brl,
@@ -84,6 +127,7 @@ def create_analytics_views(
             nome_combustivel,
             sigla_combustivel,
             COUNT(*) AS rows,
+            COUNT(DISTINCT vehicle_key) AS distinct_vehicles,
             ROUND(
                 100.0 * COUNT(*) / SUM(COUNT(*)) OVER (),
                 2
@@ -104,6 +148,7 @@ def create_analytics_views(
         SELECT
             tipo_veiculo,
             COUNT(*) AS rows,
+            COUNT(DISTINCT vehicle_key) AS distinct_vehicles,
             ROUND(
                 100.0 * COUNT(*) / SUM(COUNT(*)) OVER (),
                 2

@@ -12,6 +12,12 @@ DEFAULT_SILVER_DIR = PROJECT_ROOT / "data" / "silver"
 DEFAULT_GOLD_DIR = PROJECT_ROOT / "data" / "gold"
 DEFAULT_GOLD_PATH = DEFAULT_GOLD_DIR / "fipe_prices.parquet"
 
+VEHICLE_KEY_COLUMNS = [
+    "codigo_fipe",
+    "ano_modelo",
+    "sigla_combustivel",
+]
+
 
 @dataclass(frozen=True)
 class GoldBuildResult:
@@ -58,17 +64,113 @@ def _read_silver_partitions(
     )
 
 
+def _build_vehicle_key(
+    df: pd.DataFrame,
+) -> pd.Series:
+    """
+    Build a deterministic vehicle-level key for analytical relationships.
+
+    Identity:
+        codigo_fipe + ano_modelo + sigla_combustivel
+
+    For zero-km rows, ano_modelo is null by design and is represented by
+    the explicit token ZERO_KM.
+
+    Example:
+        001001-1|2025|g
+        001001-1|ZERO_KM|g
+    """
+
+    missing_columns = [
+        column for column in VEHICLE_KEY_COLUMNS if column not in df.columns
+    ]
+    if missing_columns:
+        raise ValueError(
+            "Cannot build vehicle_key because required columns are missing: "
+            f"{missing_columns}"
+        )
+
+    if df["codigo_fipe"].isna().any():
+        raise ValueError("Cannot build vehicle_key with null codigo_fipe values.")
+
+    if df["sigla_combustivel"].isna().any():
+        raise ValueError("Cannot build vehicle_key with null sigla_combustivel values.")
+
+    codigo_fipe = df["codigo_fipe"].astype("string").str.strip()
+    sigla_combustivel = df["sigla_combustivel"].astype("string").str.strip()
+
+    if codigo_fipe.eq("").any():
+        raise ValueError("Cannot build vehicle_key with empty codigo_fipe values.")
+
+    if sigla_combustivel.eq("").any():
+        raise ValueError(
+            "Cannot build vehicle_key with empty sigla_combustivel values."
+        )
+
+    ano_modelo_numeric = pd.to_numeric(
+        df["ano_modelo"],
+        errors="raise",
+    )
+
+    non_null_model_years = ano_modelo_numeric.dropna()
+    if not non_null_model_years.eq(non_null_model_years.round()).all():
+        raise ValueError(
+            "Cannot build vehicle_key because ano_modelo contains non-integer values."
+        )
+
+    ano_modelo_token = (
+        ano_modelo_numeric.astype("Int64").astype("string").fillna("ZERO_KM")
+    )
+
+    return codigo_fipe + "|" + ano_modelo_token + "|" + sigla_combustivel
+
+
+def _validate_vehicle_key(
+    df: pd.DataFrame,
+) -> None:
+    if "vehicle_key" not in df.columns:
+        raise ValueError("Gold dataframe is missing vehicle_key.")
+
+    if df["vehicle_key"].isna().any():
+        raise ValueError("Gold contains null vehicle_key values.")
+
+    if df["vehicle_key"].astype("string").str.strip().eq("").any():
+        raise ValueError("Gold contains empty vehicle_key values.")
+
+    identity = df[
+        [
+            "vehicle_key",
+            "codigo_fipe",
+            "ano_modelo",
+            "sigla_combustivel",
+        ]
+    ].drop_duplicates()
+
+    identities_per_key = identity.groupby(
+        "vehicle_key",
+        dropna=False,
+    ).size()
+
+    conflicting_keys = identities_per_key[identities_per_key > 1]
+
+    if not conflicting_keys.empty:
+        raise ValueError(
+            "Gold vehicle_key collision detected for keys: "
+            f"{conflicting_keys.index.tolist()}"
+        )
+
+
 def _validate_gold_dataframe(
     df: pd.DataFrame,
 ) -> tuple[tuple[int, int], tuple[int, int]]:
     required_columns = {
+        "vehicle_key",
         "ano_referencia",
         "mes_referencia",
         "data_referencia",
     }
 
     missing_columns = required_columns.difference(df.columns)
-
     if missing_columns:
         raise ValueError(
             f"Gold dataframe is missing required columns: {sorted(missing_columns)}"
@@ -76,6 +178,8 @@ def _validate_gold_dataframe(
 
     if df.empty:
         raise ValueError("Gold dataframe is empty.")
+
+    _validate_vehicle_key(df)
 
     periods = (
         df[["ano_referencia", "mes_referencia"]]
@@ -140,7 +244,10 @@ def _prepare_gold_dataframe(
     if "source_index" in gold_df.columns:
         gold_df = gold_df.drop(columns=["source_index"])
 
+    gold_df["vehicle_key"] = _build_vehicle_key(gold_df)
+
     preferred_columns = [
+        "vehicle_key",
         "tipo_veiculo",
         "codigo_fipe",
         "nome_modelo",
@@ -159,7 +266,6 @@ def _prepare_gold_dataframe(
     missing_columns = [
         column for column in preferred_columns if column not in gold_df.columns
     ]
-
     if missing_columns:
         raise ValueError(
             "Cannot build Gold because expected Silver columns are missing: "
@@ -208,7 +314,6 @@ def _atomic_write_parquet(
             temporary_path,
             destination,
         )
-
     except Exception:
         if temporary_path.exists():
             temporary_path.unlink()
@@ -232,9 +337,10 @@ def build_gold(
     1. Discover all monthly Silver partitions.
     2. Read and concatenate them.
     3. Remove operational-only columns such as source_index.
-    4. Apply a stable analytical column order.
-    5. Validate continuity and duplicate-free output.
-    6. Persist one consolidated Parquet file atomically.
+    4. Add the deterministic vehicle_key analytical identifier.
+    5. Apply a stable analytical column order.
+    6. Validate continuity, vehicle-key integrity and duplicate-free output.
+    7. Persist one consolidated Parquet file atomically.
     """
 
     destination = Path(destination)

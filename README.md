@@ -147,6 +147,25 @@ data/gold/fipe_prices.parquet
 
 Gold is intended for downstream analytics and BI consumption.
 
+Gold also adds a deterministic `vehicle_key`, built from:
+
+```text
+codigo_fipe
++ ano_modelo
++ sigla_combustivel
+```
+
+For zero-km rows, null `ano_modelo` is represented by the explicit `ZERO_KM` token.
+
+Examples:
+
+```text
+001001-1|2025|g
+001001-1|ZERO_KM|g
+```
+
+The key intentionally excludes the FIPE reference period so the same vehicle configuration can be related across time.
+
 ### DuckDB analytical layer
 
 Persistent DuckDB catalog:
@@ -167,11 +186,14 @@ gold_fipe
 Reusable analytical views:
 
 ```text
+vw_dim_vehicle
 vw_monthly_market_summary
 vw_latest_brand_summary
 vw_latest_fuel_mix
 vw_vehicle_type_summary
 ```
+
+`vw_dim_vehicle` exposes one row per analytical `vehicle_key` for BI relationships.
 
 ---
 
@@ -262,6 +284,18 @@ GRAIN_COLUMNS = [
 Vehicle and brand names are excluded from the grain because they can evolve historically for the same FIPE code.
 
 Fuel is included because a FIPE code may legitimately occur with different fuel variants.
+
+### Vehicle identity across time
+
+The period-independent vehicle identity is:
+
+```text
+codigo_fipe
++ ano_modelo
++ sigla_combustivel
+```
+
+Gold materializes this identity as `vehicle_key`. This gives Power BI and other consumers a single-column relationship key instead of requiring a composite relationship.
 
 ---
 
@@ -531,11 +565,14 @@ Responsibilities:
 Creates reusable analytical SQL views:
 
 ```text
+vw_dim_vehicle
 vw_monthly_market_summary
 vw_latest_brand_summary
 vw_latest_fuel_mix
 vw_vehicle_type_summary
 ```
+
+`vw_dim_vehicle` contains one row per `vehicle_key` and uses the most recent descriptive labels available for that vehicle identity. Historical labels remain unchanged in `gold_fipe`.
 
 ### `pipeline.py`
 
@@ -717,8 +754,11 @@ Coverage includes:
 - overwrite protection;
 - historical bootstrap loading;
 - Gold consolidation;
+- deterministic `vehicle_key` construction;
+- zero-km vehicle-key handling;
 - temporal-gap detection;
 - DuckDB base views;
+- one-row-per-vehicle analytical dimension;
 - Silver/Gold reconciliation;
 - analytical SQL views;
 - pipeline no-op behavior;
@@ -951,6 +991,22 @@ Partitioning supports incremental writes, auditing, and localized reprocessing.
 ### Consolidated Gold
 
 Gold prioritizes downstream analytical simplicity.
+
+### Deterministic vehicle key
+
+Gold creates a transparent `vehicle_key` from:
+
+```text
+codigo_fipe|ano_modelo_token|sigla_combustivel
+```
+
+A readable composite key was preferred over an opaque hash because the source domains are controlled and auditability is useful during BI modeling and debugging.
+
+The key is period-independent and therefore represents the same vehicle configuration across monthly FIPE observations.
+
+### DuckDB vehicle dimension
+
+`vw_dim_vehicle` provides one row per `vehicle_key` using the latest available descriptive labels. This dimension is intended for Power BI relationships while preserving historical labels in the Gold fact dataset.
 
 ### DuckDB over Parquet
 
