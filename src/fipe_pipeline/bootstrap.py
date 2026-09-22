@@ -32,7 +32,6 @@ from fipe_pipeline.load import (
 from fipe_pipeline.transform import transform_bronze_to_silver
 from fipe_pipeline.validate import run_validations
 
-
 LOGGER = logging.getLogger(__name__)
 
 
