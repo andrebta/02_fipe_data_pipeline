@@ -8,7 +8,6 @@ from fipe_pipeline.bootstrap import run_historical_bootstrap
 from fipe_pipeline.logging_config import configure_logging
 from fipe_pipeline.pipeline import run_pipeline
 
-
 LOGGER = logging.getLogger(__name__)
 
 
