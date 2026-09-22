@@ -18,10 +18,12 @@ from fipe_pipeline.extract import (
     extract_missing_months,
 )
 from fipe_pipeline.gold import (
-    DEFAULT_GOLD_PATH,
+    DEFAULT_GOLD_DIR,
     DEFAULT_SILVER_DIR,
     GoldBuildResult,
     build_gold,
+    gold_artifact_paths,
+    gold_artifacts_exist,
 )
 from fipe_pipeline.load import (
     LoadResult,
@@ -212,7 +214,6 @@ def process_monthly_bronze(
     )
 
     df = pd.read_parquet(bronze_path)
-
     period = _period_from_dataframe(df)
 
     LOGGER.info(
@@ -279,7 +280,7 @@ def run_pipeline(
     *,
     bronze_monthly_dir: Path | str = DEFAULT_BRONZE_MONTHLY_DIR,
     silver_dir: Path | str = DEFAULT_SILVER_DIR,
-    gold_path: Path | str = DEFAULT_GOLD_PATH,
+    gold_dir: Path | str = DEFAULT_GOLD_DIR,
     duckdb_path: Path | str = DEFAULT_DUCKDB_PATH,
     rebuild_gold: bool = True,
     refresh_duckdb: bool = True,
@@ -302,7 +303,6 @@ def run_pipeline(
         LOGGER.info("No missing Bronze months to download.")
 
     bronze_files = _list_bronze_monthly_files(bronze_monthly_dir)
-
     silver_periods = _list_silver_periods(silver_dir)
 
     pending_periods = sorted(
@@ -327,26 +327,38 @@ def run_pipeline(
     gold_result: GoldBuildResult | None = None
     duckdb_result: DuckDBBuildResult | None = None
 
-    gold_path = Path(gold_path)
+    gold_dir = Path(gold_dir)
+    gold_complete = gold_artifacts_exist(gold_dir)
 
-    should_build_gold = rebuild_gold and (
-        bool(processed_results) or not gold_path.exists()
-    )
+    should_build_gold = rebuild_gold and (bool(processed_results) or not gold_complete)
 
     if should_build_gold:
-        LOGGER.info("Building consolidated Gold dataset.")
+        LOGGER.info("Building Gold Star Schema.")
+
+        paths = gold_artifact_paths(gold_dir)
+        overwrite = any(
+            path.exists()
+            for path in (
+                paths.dim_date,
+                paths.dim_vehicle,
+                paths.fact_prices,
+            )
+        )
 
         gold_result = build_gold(
             silver_dir=silver_dir,
-            destination=gold_path,
-            overwrite=gold_path.exists(),
+            gold_dir=gold_dir,
+            overwrite=overwrite,
         )
 
         LOGGER.info(
-            "Gold build completed: rows=%s partitions=%s destination=%s",
-            gold_result.rows,
+            "Gold build completed: fact_rows=%s vehicles=%s periods=%s "
+            "partitions=%s directory=%s",
+            gold_result.fact_rows,
+            gold_result.vehicle_rows,
+            gold_result.date_rows,
             gold_result.source_partitions,
-            gold_result.destination,
+            gold_result.paths.gold_dir,
         )
     else:
         LOGGER.info("Gold rebuild not required.")
@@ -365,15 +377,17 @@ def run_pipeline(
         duckdb_result = build_duckdb_catalog(
             database_path=duckdb_path,
             silver_glob=silver_glob,
-            gold_path=gold_path,
+            gold_dir=gold_dir,
         )
 
         LOGGER.info(
             "DuckDB catalog refreshed: "
-            "silver_rows=%s gold_rows=%s "
+            "silver_rows=%s fact_rows=%s vehicles=%s periods=%s "
             "first_period=%s last_period=%s",
             duckdb_result.validation.silver_rows,
-            duckdb_result.validation.gold_rows,
+            duckdb_result.validation.fact_rows,
+            duckdb_result.validation.vehicle_rows,
+            duckdb_result.validation.date_rows,
             duckdb_result.validation.gold_first_period,
             duckdb_result.validation.gold_last_period,
         )

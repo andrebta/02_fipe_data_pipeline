@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-This document defines the Data Quality (DQ) rules that are **currently implemented** in the FIPE data pipeline.
+This document defines the Data Quality (DQ) rules currently implemented in the FIPE data pipeline.
 
 The rules are synchronized with:
 
@@ -20,11 +20,13 @@ The Bronze layer is treated as immutable source data. Invalid or ambiguous sourc
 - quarantines affected rows; or
 - removes only excess exact duplicate copies while preserving an audit dataset.
 
+Gold dimensional-model checks are documented separately in Section 9 because they validate analytical-model integrity rather than source-row quality.
+
 ---
 
 ## 2. Logical Grain
 
-The logical grain is:
+The trusted FIPE observation grain is:
 
 ```text
 ano_referencia
@@ -50,11 +52,22 @@ GRAIN_COLUMNS = [
 
 Fuel is included because the same FIPE code can legitimately occur with different fuel variants.
 
+The Gold dimensional model introduces a separate analytical vehicle natural key:
+
+```text
+codigo_fipe
++ ano_modelo
++ zero_km
++ sigla_combustivel
+```
+
+This does not change the Silver DQ grain. `zero_km` is functionally dependent on `ano_modelo` in validated source data and is included in the dimensional natural key for semantic clarity and compatibility with the Star Schema.
+
 ---
 
 ## 3. Validation Result Contract
 
-Every implemented rule returns:
+Every implemented row-level rule returns:
 
 | Field | Meaning |
 |---|---|
@@ -66,7 +79,7 @@ Every implemented rule returns:
 | `effective_action` | `NONE` when passed, otherwise the configured action |
 | `message` | Human-readable result |
 
-The currently used actions are:
+Currently used actions:
 
 | Action | Behavior |
 |---|---|
@@ -111,8 +124,6 @@ ano_referencia
 All required source columns must be present.
 
 If one or more required columns are missing, only this schema rule is returned and downstream validation does not run.
-
-### Invalid count
 
 For this rule, `invalid_rows` represents the number of missing required columns rather than a row count.
 
@@ -183,7 +194,7 @@ The historical dataset contained **506,004** null `ano_modelo` values, all assoc
 
 This is a row-level temporal-domain check.
 
-It does **not** check continuity between monthly partitions. Dataset continuity is validated separately by extraction, Silver inventory, and Gold build logic.
+It does not check continuity between monthly partitions. Dataset continuity is validated separately by extraction, Silver inventory, and Gold build logic.
 
 ---
 
@@ -275,17 +286,17 @@ Historical analysis found full consistency between the two source representation
 **Severity:** `WARNING`  
 **Action:** `DEDUPLICATE`
 
-Rows that are identical across all source columns are classified as exact duplicates.
+Rows identical across all source columns are classified as exact duplicates.
 
 ### Validation counting
 
-The validator reports **all rows that participate in exact duplicate groups** because it uses duplicate-group membership.
+The validator reports all rows participating in exact duplicate groups.
 
 ### Transformation behavior
 
-The transformation layer keeps the first copy and removes only the excess copies.
+The transformation layer keeps the first copy and removes only excess copies.
 
-The removed copies are written to the duplicates audit dataset with:
+Removed copies are written to the duplicates audit dataset with:
 
 ```text
 dq_reasons = DQ-DUP-001
@@ -323,7 +334,7 @@ ano_referencia
 
 If two or more non-identical rows share the same grain, all rows participating in that collision are quarantined.
 
-This rule runs conceptually **after exact deduplication** so the same physical duplicate is not double-counted as a grain collision.
+This rule runs conceptually after exact deduplication so the same physical duplicate is not double-counted as a grain collision.
 
 ### Historical baseline
 
@@ -331,7 +342,7 @@ After exact deduplication, **168 rows** participated in non-exact grain collisio
 
 Observed differences were concentrated mainly in historical brand/model naming inconsistencies.
 
-The pipeline does not automatically canonicalize these ambiguous records.
+The pipeline does not automatically canonicalize these ambiguous source records.
 
 ---
 
@@ -363,7 +374,7 @@ l -> Elétrico
 n -> GNV
 ```
 
-The current implementation does **not** hard-code this domain. It detects inconsistent mappings in the data being validated.
+The implementation does not hard-code this domain. It detects inconsistent mappings in the data being validated.
 
 ---
 
@@ -391,7 +402,7 @@ This table is the authoritative documentation of rule IDs currently emitted by `
 
 Validation identifies dataset-level rule outcomes.
 
-`transform.py` applies the corresponding row-level operational handling:
+`transform.py` applies corresponding row-level handling:
 
 1. add `source_index` for traceability;
 2. remove excess exact duplicate copies;
@@ -437,7 +448,7 @@ Reconciliation:
 9,477,932
 ```
 
-The 190 quarantined rows consist of the historical row-level issues identified by the implemented rules, including:
+The 190 quarantined rows include:
 
 ```text
 22 zero-price rows
@@ -470,21 +481,59 @@ data/silver/year=YYYY/month=MM/fipe.parquet
 
 Existing partitions are protected from accidental overwrite by default.
 
-## Gold continuity
+## Gold Star Schema integrity
 
-`gold.py` validates that the consolidated analytical dataset has no missing monthly periods between its first and last reference month.
+`gold.py` validates the dimensional model built from trusted Silver data.
 
-It also rejects exact duplicate rows in Gold.
+Gold artifacts:
 
-These are pipeline/storage integrity checks rather than row-level `DQ-*` rules.
+```text
+data/gold/dim_date.parquet
+data/gold/dim_vehicle.parquet
+data/gold/fct_fipe_prices.parquet
+```
+
+Checks include:
+
+- continuous monthly coverage from the first through the last reference month;
+- one unique `date_key` per `dim_date` row;
+- one unique `vehicle_key` per `dim_vehicle` row;
+- one unique vehicle natural key in `dim_vehicle`;
+- one unique `date_key + vehicle_key` observation in `fct_fipe_prices`;
+- successful resolution of every fact row to a vehicle surrogate key;
+- fact row count equal to trusted Silver row count.
+
+The vehicle natural key used for dimensional mapping is:
+
+```text
+codigo_fipe
++ ano_modelo
++ zero_km
++ sigla_combustivel
+```
+
+The generated `vehicle_key` is a sequential numeric surrogate key with no business meaning.
+
+## DuckDB dimensional reconciliation
+
+`duckdb_layer.py` additionally validates:
+
+- Silver row count equals `fct_fipe_prices` row count;
+- Silver period coverage equals Gold period coverage;
+- no orphan `date_key` values in the fact;
+- no orphan `vehicle_key` values in the fact;
+- no duplicate dimension primary keys;
+- no duplicate fact keys.
+
+These are pipeline/storage/model-integrity checks rather than row-level `DQ-*` rules.
 
 ---
 
 # 10. Observed Characteristics Not Enforced as DQ Rules
 
-The following findings were useful during source analysis but are **not currently enforced as `validate.py` rules**:
+The following findings were useful during source analysis but are not currently enforced as `validate.py` rules.
 
-### Vehicle type domain
+## Vehicle type domain
 
 Historically observed:
 
@@ -496,25 +545,27 @@ caminhão
 
 No `DQ-DOMAIN-*` vehicle-type rule is currently implemented.
 
-### Expected physical dtypes in Bronze
+## Expected physical dtypes in Bronze
 
 Historical source dtypes were documented during inspection, but `validate.py` currently validates required columns rather than strict incoming Pandas dtypes.
 
 Silver dtypes are standardized during transformation.
 
-### FIPE code vehicle-type stability
+## FIPE code vehicle-type stability
 
 Historical analysis found FIPE codes stable by `tipo_veiculo`, but there is no implemented `DQ-CODE-002`.
 
-### Monthly row-volume anomaly thresholds
+## Monthly row-volume anomaly thresholds
 
 Historical monthly row counts were analyzed, but the pipeline currently does not reject or warn on month-over-month volume changes using a statistical threshold.
 
-### Brand/model canonicalization
+## Brand/model canonicalization
 
-Historical naming inconsistencies were identified, but the pipeline deliberately does not canonicalize them yet.
+Historical naming inconsistencies were identified, but the pipeline deliberately does not canonicalize historical Silver data.
 
-Ambiguous grain collisions are quarantined instead.
+Ambiguous grain collisions are quarantined.
+
+For the Gold BI dimension, `dim_vehicle` selects the latest trusted descriptive labels for each vehicle natural key. This is dimensional modeling behavior, not source canonicalization or a DQ correction.
 
 ---
 
@@ -530,9 +581,9 @@ DQ-VOLUME-*    Monthly volume anomaly monitoring
 DQ-NAME-*      Controlled brand/model normalization checks
 ```
 
-These identifiers are **reserved only as roadmap examples** and are not currently emitted by the pipeline.
+These identifiers are reserved only as roadmap examples and are not currently emitted by the pipeline.
 
-Any future rule must be added to both:
+Any future row-level rule must be added to both:
 
 ```text
 src/fipe_pipeline/validate.py
@@ -545,7 +596,7 @@ and must include automated tests before being documented as implemented.
 
 # 12. Change-Control Principle
 
-The rule documentation and implementation must remain synchronized.
+Rule documentation and implementation must remain synchronized.
 
 When a DQ rule changes:
 
@@ -555,4 +606,12 @@ When a DQ rule changes:
 4. update this document;
 5. update the README rule summary if the public contract changes.
 
-A rule must not be presented as implemented unless executable code and automated tests support it.
+When a dimensional-integrity check changes:
+
+1. update `gold.py` and/or `duckdb_layer.py`;
+2. update the relevant Gold/DuckDB tests;
+3. update `docs/data_dictionary.md`;
+4. update `docs/dimensional_model.dbml`;
+5. update the README architecture documentation.
+
+A rule or integrity guarantee must not be presented as implemented unless executable code and automated tests support it.

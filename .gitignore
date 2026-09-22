@@ -37,3 +37,7 @@ Thumbs.db
 
 # Ruff
 .ruff_cache/
+
+# Power BI local files
+**/.pbi/localSettings.json
+**/.pbi/cache.abf

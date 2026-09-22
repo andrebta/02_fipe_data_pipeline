@@ -1,0 +1,149 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.12.0/schema.json",
+  "name": "9e0728b10582490082d6",
+  "position": {
+    "x": 960,
+    "y": 86.184538653366587,
+    "z": 6000,
+    "height": 497,
+    "width": 960,
+    "tabOrder": 6000
+  },
+  "visual": {
+    "visualType": "hundredPercentStackedBarChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_vehicle"
+                    }
+                  },
+                  "Property": "tipo_veiculo"
+                }
+              },
+              "queryRef": "dim_vehicle.tipo_veiculo",
+              "nativeQueryRef": "Tipo de Veículo",
+              "active": true,
+              "displayName": "Tipo de Veículo"
+            }
+          ]
+        },
+        "Series": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_vehicle"
+                    }
+                  },
+                  "Property": "nome_combustivel"
+                }
+              },
+              "queryRef": "dim_vehicle.nome_combustivel",
+              "nativeQueryRef": "Combustível",
+              "displayName": "Combustível"
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_medidas"
+                    }
+                  },
+                  "Property": "qtd_veiculos_periodo"
+                }
+              },
+              "queryRef": "_medidas.qtd_veiculos_periodo",
+              "nativeQueryRef": "Configurações",
+              "displayName": "Configurações"
+            }
+          ]
+        }
+      }
+    },
+    "objects": {
+      "legend": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            },
+            "position": {
+              "expr": {
+                "Literal": {
+                  "Value": "'TopRight'"
+                }
+              }
+            },
+            "showTitle": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Mix de Combustível por Tipo'"
+                }
+              }
+            },
+            "alignment": {
+              "expr": {
+                "Literal": {
+                  "Value": "'center'"
+                }
+              }
+            },
+            "fontSize": {
+              "expr": {
+                "Literal": {
+                  "Value": "16D"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "subTitle": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

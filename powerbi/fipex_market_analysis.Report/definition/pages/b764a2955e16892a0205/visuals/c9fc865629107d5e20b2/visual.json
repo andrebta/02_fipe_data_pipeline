@@ -1,0 +1,39 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.12.0/schema.json",
+  "name": "c9fc865629107d5e20b2",
+  "position": {
+    "x": 0,
+    "y": 0,
+    "z": 0,
+    "height": 86.184538653366587,
+    "width": 1189.077306733167,
+    "tabOrder": 0
+  },
+  "visual": {
+    "visualType": "textbox",
+    "objects": {
+      "general": [
+        {
+          "properties": {
+            "paragraphs": [
+              {
+                "textRuns": [
+                  {
+                    "value": "\t"
+                  },
+                  {
+                    "value": "FIPE Market Overview",
+                    "textStyle": {
+                      "fontSize": "42pt"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

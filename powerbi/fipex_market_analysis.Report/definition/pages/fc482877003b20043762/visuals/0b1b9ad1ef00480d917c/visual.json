@@ -1,0 +1,222 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.12.0/schema.json",
+  "name": "0b1b9ad1ef00480d917c",
+  "position": {
+    "x": 0,
+    "y": 86.184538653366587,
+    "z": 5000,
+    "height": 499.60099750623442,
+    "width": 960.14962593516213,
+    "tabOrder": 5000
+  },
+  "visual": {
+    "visualType": "scatterChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "HierarchyLevel": {
+                  "Expression": {
+                    "Hierarchy": {
+                      "Expression": {
+                        "SourceRef": {
+                          "Entity": "dim_vehicle"
+                        }
+                      },
+                      "Hierarchy": "Hierarquia Marca Modelo"
+                    }
+                  },
+                  "Level": "Marca"
+                }
+              },
+              "queryRef": "dim_vehicle.nome_marca Hierarchy.nome_marca",
+              "nativeQueryRef": "nome_marca Hierarchy nome_marca",
+              "active": true
+            },
+            {
+              "field": {
+                "HierarchyLevel": {
+                  "Expression": {
+                    "Hierarchy": {
+                      "Expression": {
+                        "SourceRef": {
+                          "Entity": "dim_vehicle"
+                        }
+                      },
+                      "Hierarchy": "Hierarquia Marca Modelo"
+                    }
+                  },
+                  "Level": "Modelo"
+                }
+              },
+              "queryRef": "dim_vehicle.nome_marca Hierarchy.nome_modelo",
+              "nativeQueryRef": "nome_marca Hierarchy nome_modelo",
+              "active": false
+            }
+          ]
+        },
+        "Tooltips": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_medidas"
+                    }
+                  },
+                  "Property": "qtd_cod_fipe_periodo"
+                }
+              },
+              "queryRef": "_medidas.qtd_cod_fipe_periodo",
+              "nativeQueryRef": "Códigos FIPE",
+              "displayName": "Códigos FIPE"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_medidas"
+                    }
+                  },
+                  "Property": "preco_q1_periodo"
+                }
+              },
+              "queryRef": "_medidas.preco_q1_periodo",
+              "nativeQueryRef": "Q1",
+              "displayName": "Q1"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_medidas"
+                    }
+                  },
+                  "Property": "preco_q3_periodo"
+                }
+              },
+              "queryRef": "_medidas.preco_q3_periodo",
+              "nativeQueryRef": "Q3",
+              "displayName": "Q3"
+            }
+          ]
+        },
+        "X": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_medidas"
+                    }
+                  },
+                  "Property": "qtd_veiculos_periodo"
+                }
+              },
+              "queryRef": "_medidas.qtd_veiculos_periodo",
+              "nativeQueryRef": "Configurações",
+              "active": true,
+              "displayName": "Configurações"
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_medidas"
+                    }
+                  },
+                  "Property": "mediana_preco_periodo"
+                }
+              },
+              "queryRef": "_medidas.mediana_preco_periodo",
+              "nativeQueryRef": "Preço Mediano",
+              "displayName": "Preço Mediano"
+            }
+          ]
+        }
+      }
+    },
+    "objects": {
+      "categoryAxis": [
+        {
+          "properties": {
+            "logAxisScale": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "valueAxis": [
+        {
+          "properties": {
+            "logAxisScale": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Posicionamento das Marcas: Variedade × Preço'"
+                }
+              }
+            },
+            "alignment": {
+              "expr": {
+                "Literal": {
+                  "Value": "'center'"
+                }
+              }
+            },
+            "fontSize": {
+              "expr": {
+                "Literal": {
+                  "Value": "16D"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "subTitle": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

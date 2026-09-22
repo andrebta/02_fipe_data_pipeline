@@ -1,0 +1,340 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.12.0/schema.json",
+  "name": "70a9abdcc81b471e93d4",
+  "position": {
+    "x": 0,
+    "y": 580.39900249376558,
+    "z": 6000,
+    "height": 499.60099750623442,
+    "width": 1918.9526184538654,
+    "tabOrder": 6000
+  },
+  "visual": {
+    "visualType": "pivotTable",
+    "query": {
+      "queryState": {
+        "Rows": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_vehicle"
+                    }
+                  },
+                  "Property": "nome_marca"
+                }
+              },
+              "queryRef": "dim_vehicle.nome_marca",
+              "nativeQueryRef": "Marca",
+              "active": true,
+              "displayName": "Marca"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_vehicle"
+                    }
+                  },
+                  "Property": "nome_modelo"
+                }
+              },
+              "queryRef": "dim_vehicle.nome_modelo",
+              "nativeQueryRef": "Modelo",
+              "active": false,
+              "displayName": "Modelo"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_vehicle"
+                    }
+                  },
+                  "Property": "nome_combustivel"
+                }
+              },
+              "queryRef": "dim_vehicle.nome_combustivel",
+              "nativeQueryRef": "Combustível",
+              "active": false,
+              "displayName": "Combustível"
+            }
+          ]
+        },
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_medidas"
+                    }
+                  },
+                  "Property": "qtd_veiculos_periodo"
+                }
+              },
+              "queryRef": "_medidas.qtd_veiculos_periodo",
+              "nativeQueryRef": "Configurações",
+              "displayName": "Configurações"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_medidas"
+                    }
+                  },
+                  "Property": "qtd_cod_fipe_periodo"
+                }
+              },
+              "queryRef": "_medidas.qtd_cod_fipe_periodo",
+              "nativeQueryRef": "Códigos FIPE",
+              "displayName": "Códigos FIPE"
+            },
+            {
+              "field": {
+                "Aggregation": {
+                  "Expression": {
+                    "Column": {
+                      "Expression": {
+                        "SourceRef": {
+                          "Entity": "dim_vehicle"
+                        }
+                      },
+                      "Property": "ano_modelo"
+                    }
+                  },
+                  "Function": 3
+                }
+              },
+              "queryRef": "CountNonNull(dim_vehicle.ano_modelo)",
+              "nativeQueryRef": "Início",
+              "displayName": "Início"
+            },
+            {
+              "field": {
+                "Aggregation": {
+                  "Expression": {
+                    "Column": {
+                      "Expression": {
+                        "SourceRef": {
+                          "Entity": "dim_vehicle"
+                        }
+                      },
+                      "Property": "ano_modelo"
+                    }
+                  },
+                  "Function": 4
+                }
+              },
+              "queryRef": "CountNonNull(dim_vehicle.ano_modelo)1",
+              "nativeQueryRef": "Fim",
+              "displayName": "Fim"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_medidas"
+                    }
+                  },
+                  "Property": "preco_min_periodo"
+                }
+              },
+              "queryRef": "_medidas.preco_min_periodo",
+              "nativeQueryRef": "Mínimo",
+              "displayName": "Mínimo"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_medidas"
+                    }
+                  },
+                  "Property": "preco_q1"
+                }
+              },
+              "queryRef": "_medidas.preco_q1",
+              "nativeQueryRef": "Q1",
+              "displayName": "Q1"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_medidas"
+                    }
+                  },
+                  "Property": "mediana_preco_periodo"
+                }
+              },
+              "queryRef": "_medidas.mediana_preco_periodo",
+              "nativeQueryRef": "Preço Mediano",
+              "displayName": "Preço Mediano"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_medidas"
+                    }
+                  },
+                  "Property": "preco_q3"
+                }
+              },
+              "queryRef": "_medidas.preco_q3",
+              "nativeQueryRef": "Q3",
+              "displayName": "Q3"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_medidas"
+                    }
+                  },
+                  "Property": "preco_max_periodo"
+                }
+              },
+              "queryRef": "_medidas.preco_max_periodo",
+              "nativeQueryRef": "Máximo",
+              "displayName": "Máximo"
+            }
+          ]
+        }
+      }
+    },
+    "expansionStates": [
+      {
+        "roles": [
+          "Rows"
+        ],
+        "levels": [
+          {
+            "queryRefs": [
+              "dim_vehicle.nome_marca"
+            ],
+            "isCollapsed": true,
+            "identityKeys": [
+              {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_vehicle"
+                    }
+                  },
+                  "Property": "nome_marca"
+                }
+              }
+            ],
+            "isPinned": true
+          },
+          {
+            "queryRefs": [
+              "dim_vehicle.nome_modelo"
+            ],
+            "isCollapsed": true,
+            "identityKeys": [
+              {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_vehicle"
+                    }
+                  },
+                  "Property": "nome_modelo"
+                }
+              }
+            ],
+            "isPinned": true
+          },
+          {
+            "queryRefs": [
+              "dim_vehicle.nome_combustivel"
+            ],
+            "isCollapsed": true,
+            "isPinned": true
+          }
+        ],
+        "root": {}
+      }
+    ],
+    "objects": {
+      "subTotals": [
+        {
+          "properties": {
+            "rowSubtotals": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            },
+            "columnSubtotals": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Detalhamento por Marca, Modelo e Combustível'"
+                }
+              }
+            },
+            "alignment": {
+              "expr": {
+                "Literal": {
+                  "Value": "'center'"
+                }
+              }
+            },
+            "fontSize": {
+              "expr": {
+                "Literal": {
+                  "Value": "16D"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "subTitle": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

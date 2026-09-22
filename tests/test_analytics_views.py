@@ -7,20 +7,19 @@ from fipe_pipeline.duckdb_layer import (
     connect_duckdb,
     register_parquet_views,
 )
+from fipe_pipeline.gold import build_gold
 
 
-def _write_parquet(path, rows):
+def _write_silver_partition(
+    root,
+    *,
+    year: int,
+    month: int,
+    rows: list[dict],
+):
+    path = root / f"year={year}" / f"month={month:02d}" / "fipe.parquet"
     path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(rows).to_parquet(path, index=False)
-
-
-def _vehicle_key(
-    code: str,
-    model_year: int | None,
-    fuel_code: str,
-) -> str:
-    model_year_token = "ZERO_KM" if model_year is None else str(model_year)
-    return f"{code}|{model_year_token}|{fuel_code}"
 
 
 def _row(
@@ -33,22 +32,16 @@ def _row(
     fuel_code: str,
     vehicle_type: str,
     price_brl: int,
-    model_year: int | None = 2025,
 ):
     return {
-        "vehicle_key": _vehicle_key(
-            code,
-            model_year,
-            fuel_code,
-        ),
         "tipo_veiculo": vehicle_type,
         "codigo_fipe": code,
         "nome_modelo": f"Modelo {code}",
         "nome_marca": brand,
         "nome_combustivel": fuel_name,
         "sigla_combustivel": fuel_code,
-        "ano_modelo": model_year,
-        "zero_km": model_year is None,
+        "ano_modelo": 2025,
+        "zero_km": False,
         "valor_centavos": price_brl * 100,
         "valor_formatado": f"R$ {price_brl},00",
         "mes_referencia": month,
@@ -63,66 +56,57 @@ def _row(
 
 def _prepare_connection(tmp_path):
     silver_root = tmp_path / "silver"
-    gold_path = tmp_path / "gold" / "fipe_prices.parquet"
+    gold_dir = tmp_path / "gold"
 
-    august = _row(
+    _write_silver_partition(
+        silver_root,
         year=2026,
         month=8,
-        code="001001-1",
-        brand="Marca A Antiga",
-        fuel_name="Gasolina",
-        fuel_code="g",
-        vehicle_type="carro",
-        price_brl=100_000,
-    )
-    september_a = _row(
-        year=2026,
-        month=9,
-        code="001001-1",
-        brand="Marca A",
-        fuel_name="Gasolina",
-        fuel_code="g",
-        vehicle_type="carro",
-        price_brl=110_000,
-    )
-    september_b = _row(
-        year=2026,
-        month=9,
-        code="001002-0",
-        brand="Marca B",
-        fuel_name="Diesel",
-        fuel_code="d",
-        vehicle_type="caminhão",
-        price_brl=200_000,
-    )
-
-    silver_august = august.copy()
-    silver_august.pop("vehicle_key")
-
-    silver_september_a = september_a.copy()
-    silver_september_a.pop("vehicle_key")
-
-    silver_september_b = september_b.copy()
-    silver_september_b.pop("vehicle_key")
-
-    _write_parquet(
-        silver_root / "year=2026" / "month=08" / "fipe.parquet",
-        [silver_august],
-    )
-    _write_parquet(
-        silver_root / "year=2026" / "month=09" / "fipe.parquet",
-        [
-            silver_september_a,
-            silver_september_b,
+        rows=[
+            _row(
+                year=2026,
+                month=8,
+                code="001001-1",
+                brand="Marca A Antiga",
+                fuel_name="Gasolina",
+                fuel_code="g",
+                vehicle_type="carro",
+                price_brl=100_000,
+            )
         ],
     )
-    _write_parquet(
-        gold_path,
-        [
-            august,
-            september_a,
-            september_b,
+
+    _write_silver_partition(
+        silver_root,
+        year=2026,
+        month=9,
+        rows=[
+            _row(
+                year=2026,
+                month=9,
+                code="001001-1",
+                brand="Marca A",
+                fuel_name="Gasolina",
+                fuel_code="g",
+                vehicle_type="carro",
+                price_brl=110_000,
+            ),
+            _row(
+                year=2026,
+                month=9,
+                code="001002-0",
+                brand="Marca B",
+                fuel_name="Diesel",
+                fuel_code="d",
+                vehicle_type="caminhão",
+                price_brl=200_000,
+            ),
         ],
+    )
+
+    build_gold(
+        silver_dir=silver_root,
+        gold_dir=gold_dir,
     )
 
     con = connect_duckdb(tmp_path / "fipe.duckdb")
@@ -130,7 +114,7 @@ def _prepare_connection(tmp_path):
     register_parquet_views(
         con,
         silver_glob=(silver_root / "year=*" / "month=*" / "fipe.parquet"),
-        gold_path=gold_path,
+        gold_dir=gold_dir,
     )
     create_analytics_views(con)
 
@@ -151,7 +135,7 @@ def test_create_analytics_views(tmp_path):
         ).df()
 
         assert set(views["table_name"]) == {
-            "vw_dim_vehicle",
+            "vw_fipe_prices_enriched",
             "vw_latest_brand_summary",
             "vw_latest_fuel_mix",
             "vw_monthly_market_summary",
@@ -161,32 +145,31 @@ def test_create_analytics_views(tmp_path):
         con.close()
 
 
-def test_vehicle_dimension_has_one_row_per_vehicle_key_and_latest_labels(
-    tmp_path,
-):
+def test_enriched_view_joins_fact_and_dimensions(tmp_path):
     con = _prepare_connection(tmp_path)
 
     try:
         result = con.sql(
             """
             SELECT
-                vehicle_key,
+                data_referencia,
                 nome_marca,
-                latest_label_reference
-            FROM vw_dim_vehicle
-            ORDER BY vehicle_key
+                valor_centavos
+            FROM vw_fipe_prices_enriched
+            WHERE codigo_fipe = '001001-1'
+            ORDER BY data_referencia
             """
         ).df()
 
         assert len(result) == 2
-        assert result["vehicle_key"].nunique() == 2
-
-        vehicle_a = result.loc[result["vehicle_key"].eq("001001-1|2025|g")].iloc[0]
-
-        assert vehicle_a["nome_marca"] == "Marca A"
-        assert pd.Timestamp(vehicle_a["latest_label_reference"]) == pd.Timestamp(
-            "2026-09-01"
-        )
+        assert result["nome_marca"].tolist() == [
+            "Marca A",
+            "Marca A",
+        ]
+        assert result["valor_centavos"].tolist() == [
+            10_000_000,
+            11_000_000,
+        ]
     finally:
         con.close()
 
@@ -199,7 +182,7 @@ def test_monthly_market_summary_metrics(tmp_path):
             """
             SELECT *
             FROM vw_monthly_market_summary
-            WHERE data_referencia = DATE '2026-09-01'
+            WHERE date_key = 202609
             """
         ).df()
 
@@ -265,7 +248,7 @@ def test_latest_fuel_mix_percentages(tmp_path):
         con.close()
 
 
-def test_vehicle_type_summary_covers_all_rows(tmp_path):
+def test_vehicle_type_summary_covers_all_fact_rows(tmp_path):
     con = _prepare_connection(tmp_path)
 
     try:
@@ -274,7 +257,6 @@ def test_vehicle_type_summary_covers_all_rows(tmp_path):
             SELECT
                 tipo_veiculo,
                 rows,
-                distinct_vehicles,
                 pct
             FROM vw_vehicle_type_summary
             ORDER BY tipo_veiculo
@@ -282,7 +264,6 @@ def test_vehicle_type_summary_covers_all_rows(tmp_path):
         ).df()
 
         assert int(result["rows"].sum()) == 3
-        assert int(result["distinct_vehicles"].sum()) == 2
         assert round(float(result["pct"].sum()), 2) == 100.0
     finally:
         con.close()

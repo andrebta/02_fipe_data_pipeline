@@ -1,89 +1,67 @@
 # FIPE Data Pipeline
 
-End-to-end data engineering pipeline for ingesting, validating, transforming, partitioning, serving, and querying historical Brazilian vehicle price data from the FIPE table.
+End-to-end Data Engineering pipeline for ingesting, validating, transforming,
+partitioning, modeling, and serving historical Brazilian FIPE vehicle pricing
+data.
 
-The project is designed as a portfolio-grade Data Engineering workflow with emphasis on:
+The project emphasizes:
 
 - incremental ingestion;
-- reproducibility;
-- idempotency;
-- data quality;
+- historical backfill;
+- reproducibility and idempotency;
+- deterministic data-quality rules;
+- quarantine and duplicate auditing;
 - Medallion Architecture;
 - partitioned Parquet storage;
-- analytical SQL with DuckDB;
+- dimensional modeling with a Star Schema;
+- DuckDB analytical SQL;
 - automated tests;
-- command-line execution;
-- observability through logging;
-- code quality with Ruff;
-- CI with GitHub Actions.
+- Ruff code quality checks;
+- GitHub Actions CI;
+- Power BI consumption.
 
-The current local dataset covers **January 2001 through September 2026**.
-
----
-
-## 1. Project Overview
-
-The pipeline consumes monthly FIPE data published by the FIPEX dataset project:
-
-```text
-https://github.com/fipex-labs/dataset
-```
-
-FIPEX publishes full historical snapshots. Instead of permanently storing a new full snapshot every month, this pipeline:
-
-1. discovers available GitHub Releases;
-2. identifies missing reference months;
-3. temporarily downloads the required full source snapshot;
-4. extracts only the requested month;
-5. persists the raw monthly data in Bronze;
-6. validates and transforms it;
-7. writes trusted monthly Silver partitions;
-8. quarantines invalid or ambiguous rows;
-9. audits removed exact duplicates;
-10. rebuilds a consolidated Gold Parquet dataset;
-11. refreshes a persistent DuckDB analytical catalog;
-12. exposes reusable SQL views for downstream analysis.
-
-This makes the local architecture incremental even though the upstream publication model is snapshot-based.
+The current dataset covers **January 2001 through September 2026**.
 
 ---
 
-## 2. Architecture
+# 1. Architecture
 
 ```text
 FIPEX GitHub Releases
         |
         v
-+---------------------+
-|       Bronze        |
-| raw monthly Parquet |
-+---------------------+
++----------------------+
+|        Bronze        |
+| raw monthly Parquet  |
++----------------------+
         |
         | validate.py
         | transform.py
         v
-+---------------------+
-|       Silver        |
-| trusted partitions  |
-| year=YYYY/month=MM  |
-+---------------------+
++----------------------+
+|        Silver        |
+| trusted partitions   |
+| year=YYYY/month=MM   |
++----------------------+
         |
         | gold.py
         v
-+---------------------+
-|        Gold         |
-| consolidated Parquet|
-+---------------------+
++----------------------------------+
+|          Gold Star Schema        |
+|                                  |
+|  dim_date.parquet                |
+|  dim_vehicle.parquet             |
+|  fct_fipe_prices.parquet         |
++----------------------------------+
         |
         | DuckDB
         v
-+---------------------+
-| Analytical SQL Layer|
-| views over Parquet  |
-+---------------------+
++----------------------+
+| Analytical SQL Layer |
++----------------------+
         |
         v
- Analytics / Power BI
+      Power BI
 ```
 
 Auxiliary outputs:
@@ -97,36 +75,81 @@ Logs               -> logs/fipe_pipeline.log
 
 ---
 
-## 3. Medallion Layers
+# 2. Data Source
 
-### Bronze
-
-Raw source data with minimal intervention.
+The source is the FIPEX dataset:
 
 ```text
-data/
-└── bronze/
-    ├── historical/
-    └── monthly/
+https://github.com/fipex-labs/dataset
 ```
 
-The historical snapshot is used only for the initial bootstrap.
+The pipeline intentionally selects:
 
-Monthly incremental files follow:
+```text
+fipex-prices-latest.parquet
+```
+
+and excludes:
+
+```text
+fipex-prices-latest-merged.parquet
+```
+
+This preserves historical source naming instead of retroactively replacing
+labels with merged names.
+
+---
+
+# 3. Incremental Strategy
+
+FIPEX publishes full historical snapshots.
+
+This project converts that source model into a local incremental architecture:
+
+1. discover available GitHub Releases;
+2. identify missing reference months;
+3. temporarily download the required full FIPEX snapshot;
+4. filter only the requested reference month;
+5. persist one monthly Bronze file;
+6. validate and transform it;
+7. write one trusted Silver partition;
+8. rebuild the Gold dimensional model when required;
+9. refresh the DuckDB catalog and analytical views.
+
+Monthly Bronze files:
 
 ```text
 data/bronze/monthly/fipe_YYYY_MM.parquet
 ```
 
-Example:
+Silver partitions:
 
 ```text
-data/bronze/monthly/fipe_2026_09.parquet
+data/silver/year=YYYY/month=MM/fipe.parquet
 ```
 
-### Silver
+The workflow is idempotent: existing Bronze and Silver periods are not
+reprocessed unnecessarily.
 
-Cleaned and validated data partitioned by FIPE reference period.
+---
+
+# 4. Medallion Layers
+
+## Bronze
+
+Raw source data with minimal intervention.
+
+```text
+data/bronze/
+├── historical/
+└── monthly/
+```
+
+The historical source is used for the initial bootstrap.
+
+## Silver
+
+Validated, standardized, trusted monthly partitions:
 
 ```text
 data/silver/
@@ -135,131 +158,26 @@ data/silver/
         └── fipe.parquet
 ```
 
-The Silver layer is optimized for incremental maintenance, traceability, localized reprocessing, and engineering operations.
+Silver preserves historical source labels and supports localized reprocessing.
 
-### Gold
+## Gold
 
-Consolidated analytical dataset:
-
-```text
-data/gold/fipe_prices.parquet
-```
-
-Gold is intended for downstream analytics and BI consumption.
-
-Gold also adds a deterministic `vehicle_key`, built from:
+Gold is a dimensional analytical interface rather than one wide table:
 
 ```text
-codigo_fipe
-+ ano_modelo
-+ sigla_combustivel
+data/gold/
+├── dim_date.parquet
+├── dim_vehicle.parquet
+└── fct_fipe_prices.parquet
 ```
 
-For zero-km rows, null `ano_modelo` is represented by the explicit `ZERO_KM` token.
-
-Examples:
-
-```text
-001001-1|2025|g
-001001-1|ZERO_KM|g
-```
-
-The key intentionally excludes the FIPE reference period so the same vehicle configuration can be related across time.
-
-### DuckDB analytical layer
-
-Persistent DuckDB catalog:
-
-```text
-data/fipe.duckdb
-```
-
-DuckDB does not duplicate the FIPE dataset into internal tables. It registers views that read the Parquet datasets directly.
-
-Base views:
-
-```text
-silver_fipe
-gold_fipe
-```
-
-Reusable analytical views:
-
-```text
-vw_dim_vehicle
-vw_monthly_market_summary
-vw_latest_brand_summary
-vw_latest_fuel_mix
-vw_vehicle_type_summary
-```
-
-`vw_dim_vehicle` exposes one row per analytical `vehicle_key` for BI relationships.
+These are the three tables intended for Power BI.
 
 ---
 
-## 4. Data Source
+# 5. Logical Grain
 
-The pipeline uses FIPEX GitHub Releases and intentionally selects:
-
-```text
-fipex-prices-latest.parquet
-```
-
-It does not use:
-
-```text
-fipex-prices-latest-merged.parquet
-```
-
-This preserves historical source naming observed at each FIPE reference period instead of retroactively applying merged names.
-
----
-
-## 5. Current Dataset Coverage
-
-After the historical bootstrap and September 2026 incremental load:
-
-```text
-First period:  2001-01
-Last period:   2026-09
-Partitions:    309
-Gold rows:     9,528,944
-Distinct FIPE codes in Gold: 11,398
-```
-
-Historical bootstrap:
-
-```text
-Periods loaded:      308
-Silver rows:         9,477,932
-Quarantine rows:     190
-Duplicate rows:      83
-Historical coverage: 2001-01 -> 2026-08
-```
-
-September 2026 incremental load:
-
-```text
-Rows: 51,012
-```
-
-DuckDB reconciliation:
-
-```text
-Silver rows:      9,528,944
-Gold rows:        9,528,944
-Row counts match: True
-
-Silver coverage:  2001-01 -> 2026-09
-Gold coverage:    2001-01 -> 2026-09
-Periods match:    True
-```
-
----
-
-## 6. Logical Grain
-
-The logical grain is:
+The trusted Silver observation grain is:
 
 ```text
 ano_referencia
@@ -281,25 +199,147 @@ GRAIN_COLUMNS = [
 ]
 ```
 
-Vehicle and brand names are excluded from the grain because they can evolve historically for the same FIPE code.
+`zero_km` is functionally related to `ano_modelo`:
 
-Fuel is included because a FIPE code may legitimately occur with different fuel variants.
+```text
+ano_modelo IS NULL <=> zero_km = True
+```
 
-### Vehicle identity across time
+Brand and model names are intentionally excluded from the source grain because
+historical descriptive labels can evolve.
 
-The period-independent vehicle identity is:
+---
+
+# 6. Gold Star Schema
+
+The dimensional model follows the same fact-plus-two-dimensions structure used
+in `01_automotive_market_data_analysis`.
+
+```text
+              dim_date
+                  1
+                  |
+                  *
+          fct_fipe_prices
+                  *
+                  |
+                  1
+             dim_vehicle
+```
+
+## `dim_date`
+
+One row per FIPE reference month.
+
+Columns:
+
+```text
+date_key
+ano_referencia
+mes_referencia
+ano_mes
+trimestre
+nome_mes
+```
+
+`date_key` uses `YYYYMM`.
+
+Example:
+
+```text
+202609
+```
+
+## `dim_vehicle`
+
+One row per analytical vehicle configuration.
+
+Columns:
+
+```text
+vehicle_key
+codigo_fipe
+nome_marca
+nome_modelo
+tipo_veiculo
+ano_modelo
+zero_km
+sigla_combustivel
+nome_combustivel
+```
+
+The natural key used to identify one vehicle configuration is:
 
 ```text
 codigo_fipe
 + ano_modelo
++ zero_km
 + sigla_combustivel
 ```
 
-Gold materializes this identity as `vehicle_key`. This gives Power BI and other consumers a single-column relationship key instead of requiring a composite relationship.
+`zero_km` is included here for semantic clarity and compatibility with the
+previous dimensional model, even though it is functionally dependent on
+`ano_modelo` in trusted source data.
+
+### Surrogate `vehicle_key`
+
+`vehicle_key` is a technical `BIGINT`/`int64` surrogate key with no embedded
+business meaning.
+
+The previous project does **not** generate this key randomly. Its SQL uses
+`ROW_NUMBER()` ordered by the natural vehicle key. This project implements the
+same semantics in Python:
+
+```text
+sort natural vehicle key
+-> assign 1, 2, 3, ...
+```
+
+This produces a compact numeric relationship key for Power BI.
+
+Because the Gold model is rebuilt as a consistent snapshot, the dimension and
+fact are regenerated together.
+
+### Historical label behavior
+
+Historical brand/model labels remain preserved in Silver.
+
+`dim_vehicle` uses the latest trusted descriptive labels for each natural
+vehicle key, behaving as a simple SCD Type 1 analytical dimension.
+
+## `fct_fipe_prices`
+
+Fact grain:
+
+> One FIPE price for one vehicle configuration in one FIPE reference month.
+
+Columns:
+
+```text
+date_key
+vehicle_key
+valor_centavos
+```
+
+Primary key:
+
+```text
+date_key + vehicle_key
+```
+
+Relationships:
+
+```text
+fct_fipe_prices.date_key
+    -> dim_date.date_key
+
+fct_fipe_prices.vehicle_key
+    -> dim_vehicle.vehicle_key
+```
 
 ---
 
-## 7. Data Quality
+# 7. Data Quality
 
 Validation rules are implemented in:
 
@@ -307,21 +347,7 @@ Validation rules are implemented in:
 src/fipe_pipeline/validate.py
 ```
 
-Each rule returns:
-
-```text
-rule
-passed
-invalid_rows
-severity
-action
-effective_action
-message
-```
-
-`effective_action` is `NONE` when the rule passes and otherwise reflects the configured operational action.
-
-### Implemented rules
+Implemented rules:
 
 | Rule | Purpose | Severity | Action |
 |---|---|---:|---|
@@ -339,9 +365,10 @@ message
 
 Only `FAIL_PIPELINE` stops execution.
 
-Rows requiring quarantine are removed from trusted Silver but preserved for audit.
+Invalid or ambiguous rows are preserved under quarantine rather than silently
+imputed.
 
-Detailed rule documentation:
+Detailed rules:
 
 ```text
 docs/data_quality_rules.md
@@ -349,57 +376,27 @@ docs/data_quality_rules.md
 
 ---
 
-## 8. Historical Data Quality Findings
+# 8. Historical Data Findings
 
-### Zero-km model year
-
-Observed structural relationship:
+Historical bootstrap:
 
 ```text
-zero_km = True  <=>  ano_modelo IS NULL
+Coverage:         2001-01 -> 2026-08
+Reference months: 308
+Silver rows:      9,477,932
+Quarantine rows:  190
+Duplicate rows:   83
 ```
 
-### FIPE code
-
-Expected format:
+After September 2026:
 
 ```text
-######-#
+Coverage:     2001-01 -> 2026-09
+Partitions:   309
+Fact rows:    9,528,944
 ```
 
-Regex:
-
-```text
-\d{6}-\d
-```
-
-### Fuel mapping
-
-Historically observed mappings:
-
-```text
-d -> Diesel
-e -> Álcool
-f -> Flex
-g -> Gasolina
-h -> Híbrido
-l -> Elétrico
-n -> GNV
-```
-
-### Model-year rule
-
-Structural rule:
-
-```text
-ano_modelo <= ano_referencia + 1
-```
-
-Historical age gaps are descriptive statistics, not validation thresholds.
-
-### Historical anomalies
-
-Historical inspection identified:
+Known historical findings include:
 
 ```text
 22 rows with valor_centavos = 0
@@ -407,11 +404,182 @@ Historical inspection identified:
 168 rows participating in non-exact grain collisions
 ```
 
-These records are handled by quarantine or deduplication rather than silent imputation.
+These records are handled by quarantine or deduplication.
 
 ---
 
-## 9. Project Structure
+# 9. Gold Integrity Checks
+
+The Gold builder validates:
+
+- continuous reference-month coverage;
+- unique vehicle natural keys in `dim_vehicle`;
+- unique `vehicle_key` values;
+- unique `date_key` values;
+- unique `date_key + vehicle_key` fact grain;
+- fact row count equal to trusted Silver row count;
+- no unresolved vehicle foreign keys.
+
+DuckDB additionally validates:
+
+- Silver vs fact row reconciliation;
+- Silver vs Gold temporal coverage;
+- no orphan `date_key`;
+- no orphan `vehicle_key`;
+- no duplicate dimension keys;
+- no duplicate fact keys.
+
+---
+
+# 10. DuckDB Layer
+
+Persistent database:
+
+```text
+data/fipe.duckdb
+```
+
+DuckDB registers Parquet-backed views:
+
+```text
+silver_fipe
+dim_date
+dim_vehicle
+fct_fipe_prices
+```
+
+It does not need to duplicate the complete analytical dataset into internal
+tables.
+
+Reusable SQL convenience views:
+
+```text
+vw_fipe_prices_enriched
+vw_monthly_market_summary
+vw_latest_brand_summary
+vw_latest_fuel_mix
+vw_vehicle_type_summary
+```
+
+`vw_fipe_prices_enriched` is useful for SQL exploration, but Power BI should
+consume the Star Schema tables directly.
+
+---
+
+# 11. Power BI Semantic Model
+
+Power BI should load:
+
+```text
+dim_date
+dim_vehicle
+fct_fipe_prices
+```
+
+Relationships:
+
+```text
+dim_date[date_key]
+    1 -> *
+fct_fipe_prices[date_key]
+
+dim_vehicle[vehicle_key]
+    1 -> *
+fct_fipe_prices[vehicle_key]
+```
+
+Recommended relationship settings:
+
+```text
+Cardinality: One-to-many
+Cross-filter direction: Single
+Filter direction: Dimension -> Fact
+```
+
+Do not load the old denormalized Gold table into the semantic model.
+
+Measures should be defined over `fct_fipe_prices`, while slicers and grouping
+attributes should come from `dim_date` and `dim_vehicle`.
+
+---
+
+# 12. Main Modules
+
+## `extract.py`
+
+- discovers FIPEX releases;
+- selects the highest patch for each period;
+- selects the original non-merged Parquet asset;
+- downloads source snapshots temporarily;
+- extracts missing monthly Bronze periods;
+- validates remote continuity;
+- supports catch-up execution.
+
+## `validate.py`
+
+- deterministic DQ rules;
+- schema validation;
+- null validation;
+- temporal validation;
+- price validation;
+- duplicate detection;
+- grain validation.
+
+## `transform.py`
+
+- removes excess exact duplicates;
+- quarantines invalid records;
+- standardizes data types;
+- creates `data_referencia`;
+- adds audit metadata.
+
+## `load.py`
+
+- persists monthly Silver;
+- writes quarantine outputs;
+- writes duplicate audit outputs;
+- supports the historical bootstrap;
+- uses overwrite protection and atomic writes.
+
+## `gold.py`
+
+- discovers all trusted Silver partitions;
+- validates continuity and fact grain;
+- builds `dim_date`;
+- builds `dim_vehicle`;
+- generates the numeric surrogate `vehicle_key`;
+- builds `fct_fipe_prices`;
+- validates dimensional integrity;
+- exports the three Gold Parquet files.
+
+## `duckdb_layer.py`
+
+- registers Silver and Gold Parquet-backed views;
+- validates fact/dimension integrity;
+- validates Silver/Gold reconciliation;
+- persists the DuckDB catalog.
+
+## `analytics_views.py`
+
+Creates reusable SQL views over the Star Schema.
+
+## `pipeline.py`
+
+Orchestrates:
+
+```text
+extract
+-> validate
+-> transform
+-> Silver
+-> Gold Star Schema
+-> DuckDB
+-> analytical views
+```
+
+---
+
+# 13. Project Structure
 
 ```text
 02_fipe_data_pipeline/
@@ -426,16 +594,17 @@ These records are handled by quarantine or deduplication rather than silent impu
 │   │   └── monthly/
 │   ├── silver/
 │   ├── gold/
+│   │   ├── dim_date.parquet
+│   │   ├── dim_vehicle.parquet
+│   │   └── fct_fipe_prices.parquet
 │   ├── quarantine/
 │   │   └── duplicates/
 │   └── fipe.duckdb
 │
 ├── docs/
 │   ├── data_dictionary.md
-│   └── data_quality_rules.md
-│
-├── logs/
-│   └── fipe_pipeline.log
+│   ├── data_quality_rules.md
+│   └── dimensional_model.dbml
 │
 ├── notebooks/
 │   ├── 01_source_inspection.ipynb
@@ -475,177 +644,7 @@ These records are handled by quarantine or deduplication rather than silent impu
 
 ---
 
-## 10. Main Modules
-
-### `extract.py`
-
-Responsibilities:
-
-- query GitHub Releases;
-- discover available FIPEX monthly releases;
-- select the highest patch for each period;
-- select the original non-merged Parquet asset;
-- download full snapshots temporarily;
-- filter only the requested month;
-- persist monthly Bronze files;
-- inspect local Bronze state;
-- discover missing periods;
-- support catch-up execution;
-- detect remote continuity gaps;
-- avoid re-downloading existing months.
-
-### `validate.py`
-
-Responsibilities:
-
-- deterministic DQ rules;
-- schema validation;
-- null validation;
-- temporal validation;
-- price validation;
-- duplicate detection;
-- grain validation;
-- severity/action reporting.
-
-### `transform.py`
-
-Responsibilities:
-
-- remove excess exact duplicates;
-- quarantine invalid records;
-- quarantine non-exact grain collisions;
-- standardize dtypes;
-- create `data_referencia`;
-- add audit metadata.
-
-Primary return object:
-
-```python
-TransformResult(
-    silver=...,
-    quarantine=...,
-    duplicates=...,
-)
-```
-
-### `load.py`
-
-Responsibilities:
-
-- persist monthly Silver partitions;
-- persist quarantine records;
-- persist removed duplicates;
-- perform historical bootstrap loads;
-- protect against unintended overwrite;
-- use atomic Parquet writes.
-
-### `gold.py`
-
-Responsibilities:
-
-- discover Silver partitions;
-- concatenate trusted Silver data;
-- remove operational-only columns;
-- validate monthly continuity;
-- reject exact duplicate rows;
-- persist one consolidated analytical Parquet file atomically.
-
-### `duckdb_layer.py`
-
-Responsibilities:
-
-- connect to the persistent DuckDB catalog;
-- register Parquet-backed Silver and Gold views;
-- validate Silver/Gold row counts and period coverage;
-- build or refresh the analytical DuckDB catalog;
-- safely close database connections.
-
-### `analytics_views.py`
-
-Creates reusable analytical SQL views:
-
-```text
-vw_dim_vehicle
-vw_monthly_market_summary
-vw_latest_brand_summary
-vw_latest_fuel_mix
-vw_vehicle_type_summary
-```
-
-`vw_dim_vehicle` contains one row per `vehicle_key` and uses the most recent descriptive labels available for that vehicle identity. Historical labels remain unchanged in `gold_fipe`.
-
-### `pipeline.py`
-
-Orchestrates the incremental workflow:
-
-```text
-extract
--> validate
--> transform
--> load Silver
--> rebuild Gold
--> refresh DuckDB catalog
--> refresh analytical SQL views
-```
-
-The historical bootstrap is intentionally outside the normal incremental path because it is a one-time initialization operation.
-
-### `logging_config.py`
-
-Configures console and file logging.
-
-Default log:
-
-```text
-logs/fipe_pipeline.log
-```
-
-### `__main__.py`
-
-Provides the CLI entrypoint:
-
-```bash
-python -m fipe_pipeline
-```
-
----
-
-## 11. Incremental and Idempotent Behavior
-
-If the latest month already exists in Bronze and Silver:
-
-- it is not downloaded again;
-- it is not transformed again;
-- its Silver partition is not overwritten;
-- Gold is not rebuilt unnecessarily;
-- DuckDB is not refreshed unnecessarily.
-
-Typical no-op execution:
-
-```text
-No missing Bronze months to download.
-Pending Bronze months for Silver processing: []
-Gold rebuild not required.
-DuckDB catalog refresh not required.
-Incremental FIPE pipeline completed.
-```
-
-When a new month becomes available:
-
-```text
-new FIPEX release
--> Bronze monthly extract
--> DQ validation
--> transformation
--> Silver partition
--> Gold rebuild
--> DuckDB refresh
--> analytical views refresh
-```
-
----
-
-## 12. Setup
+# 14. Setup
 
 Recommended:
 
@@ -653,28 +652,19 @@ Recommended:
 Python 3.11+
 ```
 
-Create and activate a virtual environment.
-
-Windows / Git Bash:
+Create and activate a virtual environment:
 
 ```bash
 python -m venv .venv
 source .venv/Scripts/activate
 ```
 
-Upgrade pip:
+Install:
 
 ```bash
 python -m pip install --upgrade pip
-```
-
-Install the project and development dependencies:
-
-```bash
 pip install -e ".[dev]"
 ```
-
-Dependencies are declared in `pyproject.toml`.
 
 Runtime dependencies include:
 
@@ -685,7 +675,7 @@ requests
 duckdb
 ```
 
-Development dependencies include:
+Development dependencies:
 
 ```text
 pytest
@@ -694,383 +684,137 @@ ruff
 
 ---
 
-## 13. Running the Pipeline
-
-From the project root:
+# 15. Run the Pipeline
 
 ```bash
 python -m fipe_pipeline
 ```
 
-The CLI:
-
-1. checks FIPEX releases;
-2. downloads missing Bronze months;
-3. validates new data;
-4. transforms trusted and rejected rows;
-5. writes Silver;
-6. rebuilds Gold when required;
-7. refreshes DuckDB when required;
-8. recreates analytical SQL views when required;
-9. writes execution logs.
-
-Successful no-op example:
+Normal incremental flow:
 
 ```text
-CLI execution finished successfully.
-extracted=0
-processed=0
-gold_rebuilt=False
-duckdb_refreshed=False
+new FIPEX month
+-> Bronze
+-> DQ
+-> Silver
+-> rebuild Gold Star Schema
+-> refresh DuckDB
 ```
+
+If no new month exists and all Gold artifacts already exist, execution is a
+no-op.
 
 ---
 
-## 14. Running Tests
+# 16. Tests and Code Quality
 
 Run:
 
 ```bash
+ruff check .
+ruff format --check .
 pytest -v
 ```
 
-Tests use synthetic datasets, temporary directories, mocks, and monkeypatching. They do not require the full production dataset.
-
-Coverage includes:
-
-- release-tag parsing;
-- FIPEX release discovery;
-- highest-patch selection;
-- original asset selection;
-- Bronze inventory;
-- missing-period discovery;
-- remote-gap protection;
-- extraction idempotency;
-- DQ rules;
-- quarantine;
-- exact duplicates;
-- grain collisions;
-- Silver partition writes;
-- overwrite protection;
-- historical bootstrap loading;
-- Gold consolidation;
-- deterministic `vehicle_key` construction;
-- zero-km vehicle-key handling;
-- temporal-gap detection;
-- DuckDB base views;
-- one-row-per-vehicle analytical dimension;
-- Silver/Gold reconciliation;
-- analytical SQL views;
-- pipeline no-op behavior;
-- pipeline DuckDB refresh;
-- blocking and non-blocking DQ flows.
-
----
-
-## 15. Code Quality with Ruff
-
-Ruff is used for linting, import validation, and formatting checks.
-
-Configuration is stored in:
-
-```text
-pyproject.toml
-```
-
-Local checks:
-
-```bash
-ruff check .
-```
-
-```bash
-ruff format --check .
-```
-
-Automatic fixes:
+Automatic Ruff fixes:
 
 ```bash
 ruff check . --fix
 ruff format .
 ```
 
-The configured lint families include:
+The test suite covers:
 
-```text
-E -> style errors
-F -> Python / unused import / undefined name issues
-I -> import ordering
-```
+- extraction and catch-up;
+- DQ rules;
+- quarantine;
+- exact duplicates;
+- grain collisions;
+- Silver partition writes;
+- Gold dimensional modeling;
+- surrogate key generation;
+- zero-km natural keys;
+- temporal continuity;
+- fact/dimension reconciliation;
+- foreign-key integrity;
+- analytical SQL views;
+- pipeline no-op behavior;
+- DuckDB refresh behavior.
 
 ---
 
-## 16. Continuous Integration
+# 17. Continuous Integration
 
-GitHub Actions workflow:
+GitHub Actions runs on pushes and pull requests to `main`.
 
-```text
-.github/workflows/ci.yml
-```
-
-CI runs automatically on:
+Quality stage:
 
 ```text
-push -> main
-pull request -> main
+ruff check .
+ruff format --check .
 ```
 
-The workflow has two stages.
-
-### Code quality
-
-Runs on Python 3.11:
-
-```text
-checkout repository
--> install project + dev dependencies
--> ruff check .
--> ruff format --check .
-```
-
-### Automated tests
-
-Runs after the quality stage succeeds:
+Test stage:
 
 ```text
 Python 3.11
 Python 3.12
-```
-
-Flow:
-
-```text
-checkout repository
--> install project + dev dependencies
--> pytest -v
-```
-
-This verifies both software quality and functional correctness in a clean Linux environment independent of the local development machine.
-
----
-
-## 17. Logging
-
-Logs are written to:
-
-```text
-logs/fipe_pipeline.log
-```
-
-Example:
-
-```text
-2026-09-17 15:04:14 | INFO | fipe_pipeline.pipeline | Starting incremental FIPE pipeline.
-2026-09-17 15:04:15 | INFO | fipe_pipeline.pipeline | No missing Bronze months to download.
-2026-09-17 15:04:18 | INFO | fipe_pipeline.pipeline | Pending Bronze months for Silver processing: []
-2026-09-17 15:04:18 | INFO | fipe_pipeline.pipeline | Gold rebuild not required.
-2026-09-17 15:04:18 | INFO | fipe_pipeline.pipeline | DuckDB catalog refresh not required.
+pytest -v
 ```
 
 ---
 
-## 18. DuckDB and SQL
-
-DuckDB is used as the analytical SQL engine over the existing Parquet architecture.
-
-The project does not need to copy the complete dataset into relational tables.
-
-Base views:
-
-```sql
-SELECT *
-FROM silver_fipe
-LIMIT 10;
-```
-
-```sql
-SELECT *
-FROM gold_fipe
-LIMIT 10;
-```
-
-Example analytical query:
-
-```sql
-SELECT
-    data_referencia,
-    COUNT(*) AS rows,
-    COUNT(DISTINCT codigo_fipe) AS distinct_fipe_codes,
-    MEDIAN(valor_centavos) / 100.0 AS median_price_brl
-FROM gold_fipe
-GROUP BY data_referencia
-ORDER BY data_referencia;
-```
-
-Reusable monthly summary:
-
-```sql
-SELECT *
-FROM vw_monthly_market_summary
-ORDER BY data_referencia DESC
-LIMIT 12;
-```
-
----
-
-## 19. Current SQL Findings
-
-Examples from the September 2026 analytical layer:
-
-```text
-Monthly rows:              51,012
-Distinct FIPE codes:       11,396
-Median vehicle price:      R$ 57,724.50
-```
-
-Latest fuel mix:
-
-```text
-Gasolina       48.29%
-Diesel         32.56%
-Flex           14.02%
-Híbrido         2.18%
-Elétrico        1.88%
-Álcool          0.91%
-Gás Natural     0.16%
-```
-
-These metrics are analytical outputs, not validation rules.
-
----
-
-## 20. Storage Strategy
-
-Parquet provides:
-
-- columnar storage;
-- compression;
-- efficient analytical reads;
-- compatibility with Pandas;
-- direct DuckDB querying;
-- interoperability with BI and distributed tools.
-
-Silver remains monthly partitioned:
-
-```text
-year=YYYY/month=MM/
-```
-
-Gold is consolidated for simplified downstream consumption.
-
-DuckDB provides SQL semantics over both without replacing Parquet as the primary storage format.
-
----
-
-## 21. Design Decisions
-
-### Original source asset
-
-The pipeline preserves the original unmerged FIPEX history.
-
-### No silent imputation
-
-Unknown or ambiguous source values are not invented.
-
-### Names excluded from grain
-
-Brand/model labels may evolve historically.
-
-### Fuel included in grain
-
-Fuel variants may legitimately differ for the same FIPE code.
-
-### Monthly Silver partitions
-
-Partitioning supports incremental writes, auditing, and localized reprocessing.
-
-### Consolidated Gold
-
-Gold prioritizes downstream analytical simplicity.
-
-### Deterministic vehicle key
-
-Gold creates a transparent `vehicle_key` from:
-
-```text
-codigo_fipe|ano_modelo_token|sigla_combustivel
-```
-
-A readable composite key was preferred over an opaque hash because the source domains are controlled and auditability is useful during BI modeling and debugging.
-
-The key is period-independent and therefore represents the same vehicle configuration across monthly FIPE observations.
-
-### DuckDB vehicle dimension
-
-`vw_dim_vehicle` provides one row per `vehicle_key` using the latest available descriptive labels. This dimension is intended for Power BI relationships while preserving historical labels in the Gold fact dataset.
-
-### DuckDB over Parquet
-
-SQL was introduced where it provides real analytical value rather than being added only for technology coverage.
-
----
-
-## 22. Reproducibility and Operational Safety
-
-Implemented safeguards include:
-
-- deterministic DQ rules;
-- atomic Parquet writes;
-- overwrite protection;
-- explicit quarantine;
-- duplicate auditing;
-- remote-gap detection;
-- incremental catch-up;
-- idempotent CLI execution;
-- persistent logs;
-- automated pytest suite;
-- Ruff linting and formatting checks;
-- GitHub Actions CI;
-- DuckDB Silver/Gold reconciliation.
-
----
-
-## 23. Data Files and Git
-
-Generated datasets and runtime artifacts are not committed.
-
-Typical ignored paths:
-
-```gitignore
-data/bronze/
-data/silver/
-data/gold/
-data/quarantine/
-data/*.duckdb
-data/*.duckdb.wal
-logs/
-.ruff_cache/
-```
-
-The repository stores source code, documentation, notebooks, tests, and CI configuration.
-
----
-
-## 24. Documentation
+# 18. Documentation
 
 Additional documentation:
 
 ```text
 docs/data_dictionary.md
 docs/data_quality_rules.md
+docs/dimensional_model.dbml
 ```
 
-The data dictionary documents source fields, data types, domains, and observed characteristics.
-
-The DQ document is synchronized with the currently implemented rule IDs, severities, actions, and transformation behavior.
+The DBML file documents the exact Power BI dimensional model.
 
 ---
 
-## 25. Tech Stack
+# 19. Key Engineering Decisions
+
+## Preserve raw history
+
+Bronze and Silver preserve source history rather than silently rewriting it.
+
+## No silent imputation
+
+Unknown or invalid values are quarantined instead of invented.
+
+## Integer cents
+
+`valor_centavos` remains the canonical monetary representation.
+
+## Numeric surrogate vehicle key
+
+Power BI relationships use a compact numeric surrogate key instead of a
+concatenated business identifier.
+
+## Star Schema in Gold
+
+The dimensional model is produced upstream, not reconstructed manually inside
+Power BI.
+
+## Latest labels in `dim_vehicle`
+
+Historical descriptive labels remain in Silver. The analytical dimension keeps
+the latest trusted label for each vehicle natural key.
+
+## DuckDB over Parquet
+
+DuckDB provides SQL semantics and validation while Parquet remains the primary
+analytical storage format.
+
+---
+
+# 20. Tech Stack
 
 ```text
 Python
@@ -1084,27 +828,14 @@ SQL
 Pytest
 Ruff
 GitHub Actions
+DBML
 Power BI
 Git / GitHub
 ```
 
 ---
 
-## 26. Roadmap
-
-Potential next steps:
-
-- richer SQL analytical models;
-- Power BI integration with Gold/DuckDB outputs;
-- pipeline run manifests and execution metadata;
-- test coverage reporting;
-- scheduling/orchestration;
-- cloud object storage adaptation;
-- Docker/containerization if deployment requirements justify it.
-
----
-
-## 27. Project Status
+# 21. Project Status
 
 ```text
 Historical bootstrap:       complete
@@ -1112,7 +843,10 @@ Incremental extraction:     complete
 Data-quality validation:    complete
 Transformation layer:       complete
 Partitioned Silver load:    complete
-Gold consolidation:         complete
+Gold Star Schema:           complete
+dim_date:                   complete
+dim_vehicle:                complete
+fct_fipe_prices:            complete
 DuckDB analytical layer:    complete
 Reusable SQL views:         complete
 Logging:                    complete
@@ -1120,22 +854,14 @@ CLI entrypoint:             complete
 Automated tests:            complete
 Ruff code quality checks:   complete
 GitHub Actions CI:          complete
+Power BI connection/model:  next step
 ```
 
 Primary commands:
 
 ```bash
 python -m fipe_pipeline
-```
-
-```bash
 ruff check .
-```
-
-```bash
 ruff format --check .
-```
-
-```bash
 pytest -v
 ```

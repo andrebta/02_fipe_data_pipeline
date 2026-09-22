@@ -1,0 +1,37 @@
+Table dim_date {
+  date_key integer [primary key]
+  ano_referencia integer [not null]
+  mes_referencia integer [not null]
+  ano_mes varchar [not null]
+  trimestre varchar [not null]
+  nome_mes varchar [not null]
+}
+
+Table dim_vehicle {
+  vehicle_key bigint [primary key]
+  codigo_fipe varchar [not null]
+  nome_marca varchar [not null]
+  nome_modelo varchar [not null]
+  tipo_veiculo varchar [not null]
+  ano_modelo integer
+  zero_km boolean [not null]
+  sigla_combustivel varchar [not null]
+  nome_combustivel varchar [not null]
+
+  indexes {
+    (codigo_fipe, ano_modelo, zero_km, sigla_combustivel) [unique]
+  }
+}
+
+Table fct_fipe_prices {
+  date_key integer [not null]
+  vehicle_key bigint [not null]
+  valor_centavos bigint [not null]
+
+  indexes {
+    (date_key, vehicle_key) [pk]
+  }
+}
+
+Ref: fct_fipe_prices.date_key > dim_date.date_key
+Ref: fct_fipe_prices.vehicle_key > dim_vehicle.vehicle_key

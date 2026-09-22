@@ -1,0 +1,137 @@
+table dim_date
+	lineageTag: 9b2fc2d1-ff6a-4283-8298-478a390b4ae5
+
+	column date_key
+		dataType: int64
+		formatString: 0
+		lineageTag: 3a8ca418-23da-472e-959d-b96ad221a47d
+		summarizeBy: none
+		sourceColumn: date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column ano_referencia
+		dataType: int64
+		formatString: 0
+		lineageTag: 84c7d18f-e1aa-4320-8489-4aa27e7d04dc
+		summarizeBy: sum
+		sourceColumn: ano_referencia
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column mes_referencia
+		dataType: int64
+		formatString: 0
+		lineageTag: edd0075d-a199-4c36-a027-229a03840307
+		summarizeBy: sum
+		sourceColumn: mes_referencia
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column ano_mes
+		dataType: string
+		lineageTag: 34514148-f81a-4a0d-8fa8-c8b5d299701b
+		summarizeBy: none
+		sourceColumn: ano_mes
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column trimestre
+		dataType: string
+		lineageTag: 95856c36-e627-4645-bb1a-e969db722b72
+		summarizeBy: none
+		sourceColumn: trimestre
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column nome_mes
+		dataType: string
+		lineageTag: 8204a27b-5de6-4181-8fb9-ecb188fe960b
+		summarizeBy: none
+		sourceColumn: nome_mes
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column data =
+			DATE(
+			    dim_date[ano_referencia],
+			    dim_date[mes_referencia],
+			    1
+			)
+		formatString: mmm/yyyy
+		lineageTag: 070e9cc1-8c81-43b9-96c2-4c1da7fa838f
+		summarizeBy: none
+
+		variation Variation
+			isDefault
+			relationship: 4192ae53-6f63-43ee-ab96-9f1dd078bb76
+			defaultHierarchy: LocalDateTable_203cb97d-66a4-474d-a2f6-ff0df1612fa9.'Date Hierarchy'
+
+		changedProperty = DataType
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column ano_trimestre
+		dataType: string
+		lineageTag: a6488cd3-674b-4318-90f9-f8ac61859bff
+		summarizeBy: none
+		sourceColumn: ano_trimestre
+
+		annotation SummarizationSetBy = Automatic
+
+	column mes_ano = FORMAT(dim_date[data], "YYYY/mmm")
+		lineageTag: 69f74f7a-222b-4a38-9969-183b774b062e
+		summarizeBy: none
+		sortByColumn: data
+
+		changedProperty = SortByColumn
+
+		annotation SummarizationSetBy = Automatic
+
+	hierarchy 'ano_referencia Hierarchy'
+		lineageTag: f4054b82-da92-4ce3-908f-44168f4fd53c
+
+		level ano_referencia
+			lineageTag: ba3f47c8-6b47-4df0-a69d-d06bcc63c464
+			column: ano_referencia
+
+		level trimestre
+			lineageTag: ad268845-715d-4d8b-a3e5-caae3d01e81f
+			column: trimestre
+
+		level mes_referencia
+			lineageTag: 1c823305-325f-43d8-a793-abdea37b93cc
+			column: mes_referencia
+
+	partition dim_date = m
+		mode: import
+		source =
+				let
+				    Source = Odbc.DataSource("dsn=FIPE_DuckDB", [HierarchicalNavigation=true]),
+				    fipe_Database = Source{[Name="fipe",Kind="Database"]}[Data],
+				    main_Schema = fipe_Database{[Name="main",Kind="Schema"]}[Data],
+				    dim_date_View = main_Schema{[Name="dim_date",Kind="View"]}[Data],
+				    #"Added Custom" = Table.AddColumn(dim_date_View, "ano_trimestre", each Text.From([ano_referencia]) & " " & [trimestre])
+				in
+				    #"Added Custom"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

@@ -1,0 +1,100 @@
+{
+  "version": "1.1.0",
+  "diagrams": [
+    {
+      "ordinal": 0,
+      "scrollPosition": {
+        "x": 119.38305001469371,
+        "y": 0
+      },
+      "nodes": [
+        {
+          "location": {
+            "x": 561.38305001469359,
+            "y": 339.42979359012264
+          },
+          "nodeIndex": "dim_date",
+          "nodeLineageTag": "9b2fc2d1-ff6a-4283-8298-478a390b4ae5",
+          "size": {
+            "height": 224,
+            "width": 234
+          },
+          "zIndex": 4
+        },
+        {
+          "location": {
+            "x": 21,
+            "y": 293.42979359012264
+          },
+          "nodeIndex": "dim_vehicle",
+          "nodeLineageTag": "7b25a409-05c7-4953-a5b2-b14cb501f5f3",
+          "size": {
+            "height": 296,
+            "width": 234
+          },
+          "zIndex": 1
+        },
+        {
+          "location": {
+            "x": 334.20156119318517,
+            "y": 19.289380770367927
+          },
+          "nodeIndex": "fct_fipe_prices",
+          "nodeLineageTag": "15625750-8496-45d4-8f90-39aeff288977",
+          "size": {
+            "height": 176,
+            "width": 234
+          },
+          "zIndex": 6
+        },
+        {
+          "location": {
+            "x": 1202.3830500146937,
+            "y": 0
+          },
+          "nodeIndex": "_medidas",
+          "nodeLineageTag": "a3266383-463f-432e-a569-01e75128f0ab",
+          "size": {
+            "height": 200,
+            "width": 234
+          },
+          "zIndex": 2
+        },
+        {
+          "location": {
+            "x": 1198.3830500146937,
+            "y": 237
+          },
+          "nodeIndex": "Granularidade Data",
+          "nodeLineageTag": "26610e77-9265-4adb-b754-cf8d9d5e6634",
+          "size": {
+            "height": 152,
+            "width": 234
+          },
+          "zIndex": 3
+        },
+        {
+          "location": {
+            "x": 850,
+            "y": 339.42979359012264
+          },
+          "nodeIndex": "fct_ipca",
+          "nodeLineageTag": "eb71495c-5e57-4d1e-8516-b1316e631e0b",
+          "size": {
+            "height": 176,
+            "width": 234
+          },
+          "zIndex": 5
+        }
+      ],
+      "name": "All tables",
+      "zoomValue": 100,
+      "pinKeyFieldsToTop": false,
+      "showExtraHeaderInfo": false,
+      "hideKeyFieldsWhenCollapsed": false,
+      "tablesLocked": false
+    }
+  ],
+  "selectedDiagram": "All tables",
+  "defaultDiagram": "All tables"
+}

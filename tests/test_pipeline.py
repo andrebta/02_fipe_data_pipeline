@@ -14,7 +14,7 @@ def test_run_pipeline_noop(
 ):
     bronze_dir = tmp_path / "bronze"
     silver_dir = tmp_path / "silver"
-    gold_path = tmp_path / "gold" / "fipe_prices.parquet"
+    gold_dir = tmp_path / "gold"
     duckdb_path = tmp_path / "fipe.duckdb"
 
     bronze_dir.mkdir(
@@ -48,10 +48,15 @@ def test_run_pipeline_noop(
         index=False,
     )
 
-    gold_path.parent.mkdir(
-        parents=True,
-    )
-    gold_path.write_bytes(b"existing")
+    gold_dir.mkdir(parents=True)
+
+    for filename in (
+        "dim_date.parquet",
+        "dim_vehicle.parquet",
+        "fct_fipe_prices.parquet",
+    ):
+        (gold_dir / filename).write_bytes(b"existing")
+
     duckdb_path.write_bytes(b"existing")
 
     monkeypatch.setattr(
@@ -65,7 +70,7 @@ def test_run_pipeline_noop(
     result = pipeline_module.run_pipeline(
         bronze_monthly_dir=bronze_dir,
         silver_dir=silver_dir,
-        gold_path=gold_path,
+        gold_dir=gold_dir,
         duckdb_path=duckdb_path,
     )
 
@@ -141,7 +146,7 @@ def test_pipeline_refreshes_duckdb_after_gold_rebuild(
 ):
     bronze_dir = tmp_path / "bronze"
     silver_dir = tmp_path / "silver"
-    gold_path = tmp_path / "gold" / "fipe_prices.parquet"
+    gold_dir = tmp_path / "gold"
     duckdb_path = tmp_path / "fipe.duckdb"
 
     bronze_dir.mkdir(
@@ -176,20 +181,31 @@ def test_pipeline_refreshes_duckdb_after_gold_rebuild(
         ),
     )
 
+    paths = SimpleNamespace(
+        gold_dir=gold_dir,
+        dim_date=gold_dir / "dim_date.parquet",
+        dim_vehicle=gold_dir / "dim_vehicle.parquet",
+        fact_prices=gold_dir / "fct_fipe_prices.parquet",
+    )
+
     monkeypatch.setattr(
         pipeline_module,
         "build_gold",
         lambda **kwargs: SimpleNamespace(
-            rows=1,
+            fact_rows=1,
+            vehicle_rows=1,
+            date_rows=1,
             source_partitions=1,
-            destination=gold_path,
+            paths=paths,
         ),
     )
 
     expected_duckdb_result = SimpleNamespace(
         validation=SimpleNamespace(
             silver_rows=1,
-            gold_rows=1,
+            fact_rows=1,
+            vehicle_rows=1,
+            date_rows=1,
             gold_first_period=(2026, 9),
             gold_last_period=(2026, 9),
         )
@@ -210,16 +226,15 @@ def test_pipeline_refreshes_duckdb_after_gold_rebuild(
     result = pipeline_module.run_pipeline(
         bronze_monthly_dir=bronze_dir,
         silver_dir=silver_dir,
-        gold_path=gold_path,
+        gold_dir=gold_dir,
         duckdb_path=duckdb_path,
     )
 
     assert len(result.processed_months) == 1
     assert result.gold_result is not None
     assert result.duckdb_result is expected_duckdb_result
-
     assert captured["database_path"] == duckdb_path
-    assert captured["gold_path"] == gold_path
+    assert captured["gold_dir"] == gold_dir
     assert captured["silver_glob"] == (
         silver_dir / "year=*" / "month=*" / "fipe.parquet"
     )

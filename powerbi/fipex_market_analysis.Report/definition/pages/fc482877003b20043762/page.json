@@ -1,0 +1,13 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/2.1.0/schema.json",
+  "name": "fc482877003b20043762",
+  "displayName": "Brands & Models",
+  "displayOption": "FitToPage",
+  "height": 1080,
+  "width": 1920,
+  "pageBinding": {
+    "name": "96b4351355c97529e03b",
+    "type": "Default",
+    "parameters": []
+  }
+}

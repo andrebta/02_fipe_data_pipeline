@@ -1,0 +1,168 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.12.0/schema.json",
+  "name": "2293f76f55632c9d0ad7",
+  "position": {
+    "x": 960,
+    "y": 621,
+    "z": 10000,
+    "height": 459,
+    "width": 960,
+    "tabOrder": 10000
+  },
+  "visual": {
+    "visualType": "barChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "fct_fipe_prices"
+                    }
+                  },
+                  "Property": "faixa_preco"
+                }
+              },
+              "queryRef": "fct_fipe_prices.faixa_preco",
+              "nativeQueryRef": "Faixa Preço",
+              "active": true,
+              "displayName": "Faixa Preço"
+            }
+          ]
+        },
+        "Tooltips": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_medidas"
+                    }
+                  },
+                  "Property": "qtd_veiculos"
+                }
+              },
+              "queryRef": "_medidas.qtd_veiculos",
+              "nativeQueryRef": "Configurações",
+              "displayName": "Configurações"
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Arithmetic": {
+                  "Left": {
+                    "Measure": {
+                      "Expression": {
+                        "SourceRef": {
+                          "Entity": "_medidas"
+                        }
+                      },
+                      "Property": "qtd_veiculos_snapshot"
+                    }
+                  },
+                  "Right": {
+                    "ScopedEval": {
+                      "Expression": {
+                        "Measure": {
+                          "Expression": {
+                            "SourceRef": {
+                              "Entity": "_medidas"
+                            }
+                          },
+                          "Property": "qtd_veiculos_snapshot"
+                        }
+                      },
+                      "Scope": []
+                    }
+                  },
+                  "Operator": 3
+                }
+              },
+              "queryRef": "_medidas.qtd_veiculos_snapshot",
+              "nativeQueryRef": "Percentual",
+              "displayName": "Percentual"
+            }
+          ]
+        }
+      }
+    },
+    "objects": {
+      "labels": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "valueAxis": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "visualContainerObjects": {
+      "title": [
+        {
+          "properties": {
+            "text": {
+              "expr": {
+                "Literal": {
+                  "Value": "'Distribuição por Faixa Preço'"
+                }
+              }
+            },
+            "alignment": {
+              "expr": {
+                "Literal": {
+                  "Value": "'center'"
+                }
+              }
+            },
+            "fontSize": {
+              "expr": {
+                "Literal": {
+                  "Value": "16D"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "subTitle": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

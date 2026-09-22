@@ -1,0 +1,49 @@
+table 'Granularidade Data'
+	lineageTag: 26610e77-9265-4adb-b754-cf8d9d5e6634
+
+	column 'Granularidade Data'
+		lineageTag: 7e267908-2ec2-47db-861e-e30c77fd80eb
+		summarizeBy: none
+		sourceColumn: [Value1]
+		sortByColumn: 'Granularidade Data Order'
+
+		relatedColumnDetails
+			groupByColumn: 'Granularidade Data Fields'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Granularidade Data Fields'
+		isHidden
+		lineageTag: baaeaf33-571b-40a9-af52-7919efec302c
+		summarizeBy: none
+		sourceColumn: [Value2]
+		sortByColumn: 'Granularidade Data Order'
+
+		extendedProperty ParameterMetadata =
+				{
+				  "version": 3,
+				  "kind": 2
+				}
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Granularidade Data Order'
+		isHidden
+		formatString: 0
+		lineageTag: 4e812220-b698-45fa-b4c3-65470e293d0f
+		summarizeBy: sum
+		sourceColumn: [Value3]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Granularidade Data' = calculated
+		mode: import
+		source =
+				{
+				    ("Ano", NAMEOF('dim_date'[ano_referencia]), 0),
+				    ("Trimestre", NAMEOF('dim_date'[ano_trimestre]), 1),
+				    ("Mês", NAMEOF('dim_date'[data]), 2)
+				}
+
+	annotation PBI_Id = 325c01c69fd84f8fa691ae1b9557b0bd
+

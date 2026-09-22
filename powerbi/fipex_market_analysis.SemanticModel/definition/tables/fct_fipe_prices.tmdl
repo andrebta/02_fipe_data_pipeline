@@ -1,0 +1,118 @@
+table fct_fipe_prices
+	lineageTag: 15625750-8496-45d4-8f90-39aeff288977
+
+	column date_key
+		dataType: int64
+		formatString: 0
+		lineageTag: a757658c-ed06-4936-b79a-d3d13a6488d4
+		summarizeBy: none
+		sourceColumn: date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column vehicle_key
+		dataType: int64
+		formatString: 0
+		lineageTag: ce6d7671-8bb6-4c4e-a153-8cdaaef4b411
+		summarizeBy: none
+		sourceColumn: vehicle_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column valor_centavos
+		dataType: int64
+		formatString: 0
+		lineageTag: 65c418db-a353-42f0-a929-8fbb93e666c3
+		summarizeBy: sum
+		sourceColumn: valor_centavos
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column valor_reais
+		dataType: decimal
+		formatString: "R$"\ #,0.###############;-"R$"\ #,0.###############;"R$"\ #,0.###############
+		lineageTag: ddc5980f-6375-467a-9746-d213b975e0cd
+		summarizeBy: sum
+		sourceColumn: valor_reais
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"pt-BR"}
+
+	column faixa_preco =
+			
+			VAR Price =
+			    DIVIDE(
+			        fct_fipe_prices[valor_centavos],
+			        100
+			    )
+			
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			        Price < 25000, "Até R$ 25 mil",
+			        Price < 50000, "R$ 25–50 mil",
+			        Price < 100000, "R$ 50–100 mil",
+			        Price < 200000, "R$ 100–200 mil",
+			        Price < 500000, "R$ 200–500 mil",
+			        Price < 1000000, "R$ 500 mil–1 mi",
+			        "Acima de R$ 1 mi"
+			    )
+		lineageTag: 2ff6f801-6b64-4901-8af2-6a38ba3301f2
+		summarizeBy: none
+		sortByColumn: faixa_preco_ordem
+
+		changedProperty = SortByColumn
+
+		annotation SummarizationSetBy = Automatic
+
+	column faixa_preco_ordem =
+			
+			VAR Price =
+			    DIVIDE(
+			        fct_fipe_prices[valor_centavos],
+			        100
+			    )
+			
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			        Price < 25000, 1,
+			        Price < 50000, 2,
+			        Price < 100000, 3,
+			        Price < 200000, 4,
+			        Price < 500000, 5,
+			        Price < 1000000, 6,
+			        7
+			    )
+		formatString: 0
+		lineageTag: df64c5e5-063d-4644-afdc-d7cb788c6e04
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	partition fct_fipe_prices = m
+		mode: import
+		source =
+				let
+				    Source = Odbc.DataSource("dsn=FIPE_DuckDB", [HierarchicalNavigation=true]),
+				    fipe_Database = Source{[Name="fipe",Kind="Database"]}[Data],
+				    main_Schema = fipe_Database{[Name="main",Kind="Schema"]}[Data],
+				    fct_fipe_prices_View = main_Schema{[Name="fct_fipe_prices",Kind="View"]}[Data],
+				    #"Added Custom" = Table.AddColumn(fct_fipe_prices_View, "valor_reais", each [valor_centavos]/100),
+				    #"Changed Type" = Table.TransformColumnTypes(#"Added Custom",{{"valor_reais", Currency.Type}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

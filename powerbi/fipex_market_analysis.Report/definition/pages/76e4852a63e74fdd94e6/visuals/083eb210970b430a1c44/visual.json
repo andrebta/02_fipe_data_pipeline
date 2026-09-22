@@ -1,0 +1,281 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.12.0/schema.json",
+  "name": "083eb210970b430a1c44",
+  "position": {
+    "x": 960,
+    "y": 583,
+    "z": 8002,
+    "height": 497,
+    "width": 960,
+    "tabOrder": 8002
+  },
+  "visual": {
+    "visualType": "pivotTable",
+    "query": {
+      "queryState": {
+        "Columns": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_vehicle"
+                    }
+                  },
+                  "Property": "nome_combustivel"
+                }
+              },
+              "queryRef": "dim_vehicle.nome_combustivel",
+              "nativeQueryRef": "Combustível",
+              "active": true,
+              "displayName": "Combustível"
+            }
+          ]
+        },
+        "Rows": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_vehicle"
+                    }
+                  },
+                  "Property": "tipo_veiculo"
+                }
+              },
+              "queryRef": "dim_vehicle.tipo_veiculo",
+              "nativeQueryRef": "Tipo",
+              "active": true,
+              "displayName": "Tipo"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_vehicle"
+                    }
+                  },
+                  "Property": "nome_marca"
+                }
+              },
+              "queryRef": "dim_vehicle.nome_marca",
+              "nativeQueryRef": "Marca",
+              "active": true,
+              "displayName": "Marca"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_vehicle"
+                    }
+                  },
+                  "Property": "nome_modelo"
+                }
+              },
+              "queryRef": "dim_vehicle.nome_modelo",
+              "nativeQueryRef": "Modelo",
+              "active": true,
+              "displayName": "Modelo"
+            }
+          ]
+        },
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_medidas"
+                    }
+                  },
+                  "Property": "preco_mediana_snapshot"
+                }
+              },
+              "queryRef": "_medidas.preco_mediana_snapshot",
+              "nativeQueryRef": "Mediana Preço Snapshot",
+              "displayName": "Mediana Preço Snapshot"
+            }
+          ]
+        }
+      }
+    },
+    "expansionStates": [
+      {
+        "roles": [
+          "Rows"
+        ],
+        "levels": [
+          {
+            "queryRefs": [
+              "dim_vehicle.tipo_veiculo"
+            ],
+            "isCollapsed": true,
+            "identityKeys": [
+              {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_vehicle"
+                    }
+                  },
+                  "Property": "tipo_veiculo"
+                }
+              }
+            ],
+            "isPinned": true
+          },
+          {
+            "queryRefs": [
+              "dim_vehicle.nome_marca"
+            ],
+            "isCollapsed": true,
+            "identityKeys": [
+              {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "dim_vehicle"
+                    }
+                  },
+                  "Property": "nome_marca"
+                }
+              }
+            ],
+            "isPinned": true
+          },
+          {
+            "queryRefs": [
+              "dim_vehicle.nome_modelo"
+            ],
+            "isCollapsed": true,
+            "isPinned": true
+          }
+        ],
+        "root": {
+          "children": [
+            {
+              "identityValues": [
+                {
+                  "Literal": {
+                    "Value": "'Carro'"
+                  }
+                }
+              ],
+              "isToggled": true,
+              "children": [
+                {
+                  "identityValues": [
+                    {
+                      "Literal": {
+                        "Value": "'BMW'"
+                      }
+                    }
+                  ],
+                  "isToggled": true
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "objects": {
+      "subTotals": [
+        {
+          "properties": {
+            "rowSubtotals": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            },
+            "columnSubtotals": {
+              "expr": {
+                "Literal": {
+                  "Value": "false"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "values": [
+        {
+          "properties": {
+            "backColor": {
+              "solid": {
+                "color": {
+                  "expr": {
+                    "FillRule": {
+                      "Input": {
+                        "Measure": {
+                          "Expression": {
+                            "SourceRef": {
+                              "Entity": "_medidas"
+                            }
+                          },
+                          "Property": "preco_mediano_log"
+                        }
+                      },
+                      "FillRule": {
+                        "linearGradient3": {
+                          "min": {
+                            "color": {
+                              "Literal": {
+                                "Value": "'#67a897'"
+                              }
+                            }
+                          },
+                          "mid": {
+                            "color": {
+                              "Literal": {
+                                "Value": "'#ffc966'"
+                              }
+                            }
+                          },
+                          "max": {
+                            "color": {
+                              "Literal": {
+                                "Value": "'#ce7b64'"
+                              }
+                            }
+                          },
+                          "nullColoringStrategy": {
+                            "strategy": {
+                              "Literal": {
+                                "Value": "'noColor'"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "selector": {
+            "data": [
+              {
+                "dataViewWildcard": {
+                  "matchingOption": 1
+                }
+              }
+            ],
+            "metadata": "_medidas.preco_mediana_snapshot"
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

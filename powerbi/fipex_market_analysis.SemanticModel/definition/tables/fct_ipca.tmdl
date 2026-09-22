@@ -1,0 +1,86 @@
+table fct_ipca
+	lineageTag: eb71495c-5e57-4d1e-8516-b1316e631e0b
+
+	column date_key
+		dataType: int64
+		formatString: 0
+		lineageTag: e61ae552-aaf3-4a1e-9849-7fdf9ec9f036
+		summarizeBy: none
+		sourceColumn: date_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column data
+		dataType: dateTime
+		formatString: mmm/yyyy
+		lineageTag: 8f7bfbee-956e-4828-bad3-ff47ef569319
+		summarizeBy: none
+		sourceColumn: data
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column ipca_mensal_pct
+		dataType: double
+		formatString: 0.00%;-0.00%;0.00%
+		lineageTag: 36b9dec4-ed24-494f-94f9-5c3beaf506ce
+		summarizeBy: none
+		sourceColumn: ipca_mensal_pct
+
+		annotation SummarizationSetBy = Automatic
+
+	partition fct_ipca = m
+		mode: import
+		source =
+				let
+				    Source = Json.Document(
+				        Web.Contents(
+				            "https://api.bcb.gov.br",
+				            [
+				                RelativePath = "dados/serie/bcdata.sgs.433/dados",
+				                Query = [formato = "json"]
+				            ]
+				        )
+				    ),
+				    RawTable = Table.FromRecords(Source),
+				    Parsed = Table.TransformColumns(
+				        RawTable,
+				        {
+				            {
+				                "data",
+				                each Date.FromText(_, [Format = "dd/MM/yyyy", Culture = "pt-BR"]),
+				                type date
+				            },
+				            {
+				                "valor",
+				                each Number.FromText(_, "en-US") / 100,
+				                type number
+				            }
+				        }
+				    ),
+				    Renamed = Table.RenameColumns(
+				        Parsed,
+				        {{"valor", "ipca_mensal_pct"}}
+				    ),
+				    Filtered = Table.SelectRows(
+				        Renamed,
+				        each [data] >= #date(2001, 1, 1)
+				    ),
+				    AddDateKey = Table.AddColumn(
+				        Filtered,
+				        "date_key",
+				        each Date.Year([data]) * 100 + Date.Month([data]),
+				        Int64.Type
+				    ),
+				    Selected = Table.SelectColumns(
+				        AddDateKey,
+				        {"date_key", "data", "ipca_mensal_pct"}
+				    )
+				in
+				    Selected
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

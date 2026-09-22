@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Report",
+    "displayName": "fipex_market_analysis"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "e6ce3a94-d64d-4cb2-a9c9-6e2dc58be071"
+  }
+}

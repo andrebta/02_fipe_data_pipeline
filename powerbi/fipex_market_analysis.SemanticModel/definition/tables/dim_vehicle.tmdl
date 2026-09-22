@@ -1,0 +1,136 @@
+table dim_vehicle
+	lineageTag: 7b25a409-05c7-4953-a5b2-b14cb501f5f3
+
+	column vehicle_key
+		dataType: int64
+		formatString: 0
+		lineageTag: 5ca4c144-5790-496b-975c-455801686eb5
+		summarizeBy: none
+		sourceColumn: vehicle_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column codigo_fipe
+		dataType: string
+		lineageTag: faccde3b-0eca-4b3e-b941-0efdeb99aa97
+		summarizeBy: none
+		sourceColumn: codigo_fipe
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column nome_marca
+		dataType: string
+		lineageTag: b63e1981-4357-40ea-bd91-100f2aea61c5
+		summarizeBy: none
+		sourceColumn: nome_marca
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column nome_modelo
+		dataType: string
+		lineageTag: 04265bf7-e926-4ad4-9b5b-4d3357280a6d
+		summarizeBy: none
+		sourceColumn: nome_modelo
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column marca_modelo
+		dataType: string
+		lineageTag: 6695f9eb-30f6-428c-8212-e8c7c7747cf3
+		summarizeBy: none
+		sourceColumn: marca_modelo
+
+		annotation SummarizationSetBy = Automatic
+
+	column tipo_veiculo
+		dataType: string
+		lineageTag: 261e62fa-7543-459a-b832-657ba249f8e1
+		summarizeBy: none
+		sourceColumn: tipo_veiculo
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column ano_modelo
+		dataType: int64
+		formatString: 0
+		lineageTag: 8ab25caf-c6fb-4d78-bab1-ad44bc013ec8
+		summarizeBy: none
+		sourceColumn: ano_modelo
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column zero_km
+		dataType: string
+		lineageTag: 8d0aad13-c5e5-41c6-aee6-3b9ca293c17d
+		summarizeBy: none
+		sourceColumn: zero_km
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column sigla_combustivel
+		dataType: string
+		lineageTag: f7865ce7-1131-4827-b8a6-824e1d2c034f
+		summarizeBy: none
+		sourceColumn: sigla_combustivel
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column nome_combustivel
+		dataType: string
+		lineageTag: 6d173ba3-98df-4d3d-abbf-cd8d042a94a2
+		summarizeBy: none
+		sourceColumn: nome_combustivel
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	hierarchy 'Hierarquia Marca Modelo'
+		lineageTag: c0031333-28fe-44e0-af62-c84e9905fe16
+
+		level Marca
+			lineageTag: d5586a00-5203-4b09-baac-0c74a220ca16
+			column: nome_marca
+
+		level Modelo
+			lineageTag: 03c722c7-7577-4883-8676-bd9badf5776b
+			column: nome_modelo
+
+	partition dim_vehicle = m
+		mode: import
+		source =
+				let
+				    Source = Odbc.DataSource("dsn=FIPE_DuckDB", [HierarchicalNavigation=true]),
+				    fipe_Database = Source{[Name="fipe",Kind="Database"]}[Data],
+				    main_Schema = fipe_Database{[Name="main",Kind="Schema"]}[Data],
+				    dim_vehicle_View = main_Schema{[Name="dim_vehicle",Kind="View"]}[Data],
+				    #"Capitalized Each Word" = Table.TransformColumns(dim_vehicle_View,{{"tipo_veiculo", Text.Proper, type text}}),
+				    #"Added Brand Model" = Table.AddColumn(
+				        #"Capitalized Each Word",
+				        "marca_modelo",
+				        each [nome_marca] & " | " & [nome_modelo],
+				        type text
+				    )
+				in
+				    #"Added Brand Model"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+
