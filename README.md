@@ -1,26 +1,65 @@
 # FIPE Data Pipeline
 
-End-to-end Data Engineering pipeline for ingesting, validating, transforming,
-partitioning, modeling, and serving historical Brazilian FIPE vehicle pricing
-data.
+End-to-end Data Engineering and Analytics project for ingesting, validating,
+transforming, modeling, querying, and visualizing historical Brazilian FIPE
+vehicle pricing data.
 
-The project emphasizes:
+The project combines:
 
-- incremental ingestion;
-- historical backfill;
-- reproducibility and idempotency;
-- deterministic data-quality rules;
+- incremental ingestion from FIPEX GitHub Releases;
+- historical backfill from January 2001 onward;
+- deterministic data-quality validation;
 - quarantine and duplicate auditing;
 - Medallion Architecture;
 - partitioned Parquet storage;
-- dimensional modeling with a Star Schema;
-- DuckDB analytical SQL;
-- automated tests;
-- Ruff code quality checks;
-- GitHub Actions CI;
-- Power BI consumption.
+- a Gold Star Schema;
+- DuckDB as the analytical SQL layer;
+- automated tests and CI;
+- a version-controlled Power BI Project (`.pbip`);
+- official IPCA inflation context for financial interpretation.
 
-The current dataset covers **January 2001 through September 2026**.
+The current FIPE dataset covers **January 2001 through September 2026**.
+
+---
+
+# Dashboard Preview
+
+The Power BI report is stored as a version-controlled PBIP project under
+`powerbi/`.
+
+## Market Overview
+
+Single-period snapshot of the FIPE market, including median price, current
+vehicle configurations, FIPE codes, brands, vehicle-type mix, leading brands,
+and price-range distribution.
+
+![FIPE Market Overview](docs/images/powerbi/fipex_market_overview.png)
+
+## Market Evolution
+
+Longitudinal analysis with dynamic Month / Quarter / Year granularity,
+including median-price evolution, FIPE coverage growth, absolute configuration
+change, vehicle-type composition, and accumulated official IPCA inflation.
+
+![FIPE Market Evolution](docs/images/powerbi/fipex_market_evolution.png)
+
+## Brands & Models
+
+Exploratory brand positioning using price and portfolio breadth, price
+distribution through median and interquartile range, and detailed
+brand/model/fuel drill-down.
+
+![FIPE Brands and Models](docs/images/powerbi/fipex_brands_models.png)
+
+## Vehicle Profile & Price Drivers
+
+Cross-sectional exploration of model year, fuel mix, price segmentation by
+vehicle type and fuel, and interactive decomposition of median price.
+
+![FIPE Vehicle Profile and Price Drivers](docs/images/powerbi/fipex_vehicles_prices.png)
+
+> A public interactive Power BI link will be added after the report is
+> published to Power BI Service.
 
 ---
 
@@ -58,10 +97,18 @@ FIPEX GitHub Releases
         v
 +----------------------+
 | Analytical SQL Layer |
+| Parquet-backed views |
 +----------------------+
         |
+        | ODBC / Import
         v
-      Power BI
++----------------------+
+|      Power BI        |
+| Semantic + Analytics |
++----------------------+
+        |
+        +--> Official IPCA context
+             (IBGE via BCB SGS)
 ```
 
 Auxiliary outputs:
@@ -75,9 +122,11 @@ Logs               -> logs/fipe_pipeline.log
 
 ---
 
-# 2. Data Source
+# 2. Data Sources
 
-The source is the FIPEX dataset:
+## FIPE vehicle pricing
+
+The primary source is the FIPEX dataset:
 
 ```text
 https://github.com/fipex-labs/dataset
@@ -96,7 +145,26 @@ fipex-prices-latest-merged.parquet
 ```
 
 This preserves historical source naming instead of retroactively replacing
-labels with merged names.
+historical labels with merged/current labels.
+
+## Official inflation context
+
+The Power BI semantic model also includes monthly official Brazilian IPCA
+inflation data.
+
+The report uses the IPCA series published by the Brazilian Central Bank SGS
+with IBGE as the official statistical source:
+
+```text
+BCB SGS series 433
+https://api.bcb.gov.br/
+```
+
+IPCA is treated as a separate monthly analytical fact related to the date
+dimension.
+
+Accumulated inflation is **compounded across monthly rates** rather than
+calculated as a simple arithmetic sum.
 
 ---
 
@@ -104,17 +172,21 @@ labels with merged names.
 
 FIPEX publishes full historical snapshots.
 
-This project converts that source model into a local incremental architecture:
+This project converts that upstream snapshot model into a local incremental
+architecture:
 
 1. discover available GitHub Releases;
-2. identify missing reference months;
+2. identify missing FIPE reference months;
 3. temporarily download the required full FIPEX snapshot;
 4. filter only the requested reference month;
 5. persist one monthly Bronze file;
-6. validate and transform it;
+6. validate and transform the new data;
 7. write one trusted Silver partition;
-8. rebuild the Gold dimensional model when required;
-9. refresh the DuckDB catalog and analytical views.
+8. quarantine invalid or ambiguous records;
+9. audit removed exact duplicate copies;
+10. rebuild the Gold dimensional model only when required;
+11. refresh the persistent DuckDB analytical catalog;
+12. expose the updated Star Schema to Power BI.
 
 Monthly Bronze files:
 
@@ -162,7 +234,7 @@ Silver preserves historical source labels and supports localized reprocessing.
 
 ## Gold
 
-Gold is a dimensional analytical interface rather than one wide table:
+Gold is an analytical Star Schema rather than a wide denormalized table:
 
 ```text
 data/gold/
@@ -171,7 +243,7 @@ data/gold/
 └── fct_fipe_prices.parquet
 ```
 
-These are the three tables intended for Power BI.
+These three artifacts are the BI-facing FIPE model.
 
 ---
 
@@ -205,15 +277,17 @@ GRAIN_COLUMNS = [
 ano_modelo IS NULL <=> zero_km = True
 ```
 
-Brand and model names are intentionally excluded from the source grain because
-historical descriptive labels can evolve.
+Brand and model names are intentionally excluded from the Silver grain because
+historical descriptive labels can evolve for the same FIPE business entity.
+
+Fuel remains part of the grain because the same FIPE code can legitimately
+appear with different fuel variants.
 
 ---
 
 # 6. Gold Star Schema
 
-The dimensional model follows the same fact-plus-two-dimensions structure used
-in `01_automotive_market_data_analysis`.
+The Gold layer contains one fact table and two dimensions:
 
 ```text
               dim_date
@@ -230,8 +304,6 @@ in `01_automotive_market_data_analysis`.
 ## `dim_date`
 
 One row per FIPE reference month.
-
-Columns:
 
 ```text
 date_key
@@ -254,8 +326,6 @@ Example:
 
 One row per analytical vehicle configuration.
 
-Columns:
-
 ```text
 vehicle_key
 codigo_fipe
@@ -268,7 +338,7 @@ sigla_combustivel
 nome_combustivel
 ```
 
-The natural key used to identify one vehicle configuration is:
+Vehicle natural key:
 
 ```text
 codigo_fipe
@@ -277,41 +347,34 @@ codigo_fipe
 + sigla_combustivel
 ```
 
-`zero_km` is included here for semantic clarity and compatibility with the
-previous dimensional model, even though it is functionally dependent on
-`ano_modelo` in trusted source data.
-
 ### Surrogate `vehicle_key`
 
-`vehicle_key` is a technical `BIGINT`/`int64` surrogate key with no embedded
-business meaning.
+`vehicle_key` is a technical numeric surrogate key (`BIGINT` / `int64`) with
+no embedded business meaning.
 
-The previous project does **not** generate this key randomly. Its SQL uses
-`ROW_NUMBER()` ordered by the natural vehicle key. This project implements the
-same semantics in Python:
+The key is generated deterministically using row-number semantics after sorting
+the natural vehicle key:
 
 ```text
 sort natural vehicle key
 -> assign 1, 2, 3, ...
 ```
 
-This produces a compact numeric relationship key for Power BI.
+This produces a compact single-column relationship key for Power BI.
 
-Because the Gold model is rebuilt as a consistent snapshot, the dimension and
-fact are regenerated together.
+## Historical descriptive labels
 
-### Historical label behavior
+Historical source labels remain preserved in Silver.
 
-Historical brand/model labels remain preserved in Silver.
-
-`dim_vehicle` uses the latest trusted descriptive labels for each natural
-vehicle key, behaving as a simple SCD Type 1 analytical dimension.
+`dim_vehicle` keeps the latest trusted descriptive label for each vehicle
+natural key, behaving as a simple SCD Type 1 analytical dimension.
 
 ## `fct_fipe_prices`
 
 Fact grain:
 
-> One FIPE price for one vehicle configuration in one FIPE reference month.
+> One FIPE price for one analytical vehicle configuration in one FIPE
+> reference month.
 
 Columns:
 
@@ -339,7 +402,39 @@ fct_fipe_prices.vehicle_key
 
 ---
 
-# 7. Data Quality
+# 7. Current Dataset Coverage
+
+After the historical bootstrap and the September 2026 incremental load:
+
+```text
+FIPE coverage:        2001-01 -> 2026-09
+Reference periods:    309
+Fact rows:            9,528,944
+Vehicle dimension:    59,582 rows
+Date dimension:       309 rows
+```
+
+September 2026 snapshot:
+
+```text
+Vehicle configurations:  51,012
+Distinct FIPE codes:      11,396
+Median FIPE price:        R$ 57,724.50
+```
+
+Historical bootstrap:
+
+```text
+Coverage:          2001-01 -> 2026-08
+Reference months:  308
+Silver rows:       9,477,932
+Quarantine rows:   190
+Duplicate rows:    83
+```
+
+---
+
+# 8. Data Quality
 
 Validation rules are implemented in:
 
@@ -368,7 +463,7 @@ Only `FAIL_PIPELINE` stops execution.
 Invalid or ambiguous rows are preserved under quarantine rather than silently
 imputed.
 
-Detailed rules:
+Detailed documentation:
 
 ```text
 docs/data_quality_rules.md
@@ -376,44 +471,56 @@ docs/data_quality_rules.md
 
 ---
 
-# 8. Historical Data Findings
+# 9. Historical Data Findings
 
-Historical bootstrap:
-
-```text
-Coverage:         2001-01 -> 2026-08
-Reference months: 308
-Silver rows:      9,477,932
-Quarantine rows:  190
-Duplicate rows:   83
-```
-
-After September 2026:
-
-```text
-Coverage:     2001-01 -> 2026-09
-Partitions:   309
-Fact rows:    9,528,944
-```
-
-Known historical findings include:
+Historical inspection identified:
 
 ```text
 22 rows with valor_centavos = 0
-83 excess exact duplicate rows
+83 excess exact duplicate copies
 168 rows participating in non-exact grain collisions
 ```
 
 These records are handled by quarantine or deduplication.
 
+Other structural findings include:
+
+```text
+zero_km = True <=> ano_modelo IS NULL
+```
+
+FIPE codes follow:
+
+```text
+######-#
+```
+
+Regex:
+
+```text
+\d{6}-\d
+```
+
+Historically observed fuel mappings:
+
+```text
+d -> Diesel
+e -> Álcool
+f -> Flex
+g -> Gasolina
+h -> Híbrido
+l -> Elétrico
+n -> GNV
+```
+
 ---
 
-# 9. Gold Integrity Checks
+# 10. Gold Integrity Checks
 
 The Gold builder validates:
 
-- continuous reference-month coverage;
-- unique vehicle natural keys in `dim_vehicle`;
+- continuous monthly reference coverage;
+- unique natural vehicle keys in `dim_vehicle`;
 - unique `vehicle_key` values;
 - unique `date_key` values;
 - unique `date_key + vehicle_key` fact grain;
@@ -423,7 +530,7 @@ The Gold builder validates:
 DuckDB additionally validates:
 
 - Silver vs fact row reconciliation;
-- Silver vs Gold temporal coverage;
+- Silver vs Gold period coverage;
 - no orphan `date_key`;
 - no orphan `vehicle_key`;
 - no duplicate dimension keys;
@@ -431,7 +538,7 @@ DuckDB additionally validates:
 
 ---
 
-# 10. DuckDB Layer
+# 11. DuckDB Analytical Layer
 
 Persistent database:
 
@@ -448,7 +555,7 @@ dim_vehicle
 fct_fipe_prices
 ```
 
-It does not need to duplicate the complete analytical dataset into internal
+The full FIPE dataset does not need to be duplicated into internal DuckDB
 tables.
 
 Reusable SQL convenience views:
@@ -461,14 +568,24 @@ vw_latest_fuel_mix
 vw_vehicle_type_summary
 ```
 
-`vw_fipe_prices_enriched` is useful for SQL exploration, but Power BI should
-consume the Star Schema tables directly.
+Power BI consumes the Star Schema directly rather than the enriched SQL view.
 
 ---
 
-# 11. Power BI Semantic Model
+# 12. Power BI Semantic Model
 
-Power BI should load:
+The Power BI Project is version controlled under:
+
+```text
+powerbi/
+├── fipex_market_analysis.pbip
+├── fipex_market_analysis.Report/
+└── fipex_market_analysis.SemanticModel/
+```
+
+The report imports the FIPE Star Schema from DuckDB through ODBC.
+
+Primary FIPE model:
 
 ```text
 dim_date
@@ -488,98 +605,124 @@ dim_vehicle[vehicle_key]
 fct_fipe_prices[vehicle_key]
 ```
 
-Recommended relationship settings:
+Relationship direction:
 
 ```text
-Cardinality: One-to-many
-Cross-filter direction: Single
-Filter direction: Dimension -> Fact
+Dimension -> Fact
 ```
 
-Do not load the old denormalized Gold table into the semantic model.
+The semantic model also contains:
 
-Measures should be defined over `fct_fipe_prices`, while slicers and grouping
-attributes should come from `dim_date` and `dim_vehicle`.
+```text
+fct_ipca
+_medidas
+Granularidade Data
+```
+
+where:
+
+- `fct_ipca` adds official monthly IPCA context;
+- `_medidas` centralizes DAX measures;
+- `Granularidade Data` is a Field Parameter used to switch between Month,
+  Quarter, and Year in longitudinal analysis.
+
+## Temporal semantics
+
+The report deliberately separates two analytical modes.
+
+### Snapshot pages
+
+`Market Overview`, `Brands & Models`, and `Vehicle Profile & Price Drivers`
+use a **single FIPE reference period**.
+
+This avoids combining prices from different monetary periods when comparing
+brands, segments, model years, or price distributions.
+
+### Longitudinal page
+
+`Market Evolution` uses a date range and dynamic temporal granularity.
+
+Measures compare:
+
+```text
+Month       -> previous month
+Quarter     -> previous quarter
+Year        -> previous year
+```
+
+This supports consistent growth-rate analysis at different levels of temporal
+aggregation.
 
 ---
 
-# 12. Main Modules
+# 13. Power BI Report Pages
 
-## `extract.py`
+## 1. Market Overview
 
-- discovers FIPEX releases;
-- selects the highest patch for each period;
-- selects the original non-merged Parquet asset;
-- downloads source snapshots temporarily;
-- extracts missing monthly Bronze periods;
-- validates remote continuity;
-- supports catch-up execution.
+Purpose:
 
-## `validate.py`
+> What does the FIPE market look like in the selected reference month?
 
-- deterministic DQ rules;
-- schema validation;
-- null validation;
-- temporal validation;
-- price validation;
-- duplicate detection;
-- grain validation.
+Main analyses:
 
-## `transform.py`
+- median FIPE price;
+- number of analytical vehicle configurations;
+- distinct FIPE codes;
+- number of brands;
+- vehicle-type mix;
+- median price by vehicle type;
+- top brands by FIPE configuration variety;
+- vehicle distribution across price bands.
 
-- removes excess exact duplicates;
-- quarantines invalid records;
-- standardizes data types;
-- creates `data_referencia`;
-- adds audit metadata.
+## 2. Market Evolution
 
-## `load.py`
+Purpose:
 
-- persists monthly Silver;
-- writes quarantine outputs;
-- writes duplicate audit outputs;
-- supports the historical bootstrap;
-- uses overwrite protection and atomic writes.
+> How has FIPE market coverage, price, and composition changed over time?
 
-## `gold.py`
+Main analyses:
 
-- discovers all trusted Silver partitions;
-- validates continuity and fact grain;
-- builds `dim_date`;
-- builds `dim_vehicle`;
-- generates the numeric surrogate `vehicle_key`;
-- builds `fct_fipe_prices`;
-- validates dimensional integrity;
-- exports the three Gold Parquet files.
+- median FIPE price evolution;
+- configuration and FIPE-code growth versus the previous period;
+- absolute configuration change;
+- vehicle-type composition through time;
+- dynamic Month / Quarter / Year granularity;
+- accumulated official IPCA inflation for macroeconomic context.
 
-## `duckdb_layer.py`
+## 3. Brands & Models
 
-- registers Silver and Gold Parquet-backed views;
-- validates fact/dimension integrity;
-- validates Silver/Gold reconciliation;
-- persists the DuckDB catalog.
+Purpose:
 
-## `analytics_views.py`
+> How do brands position themselves in price and portfolio breadth?
 
-Creates reusable SQL views over the Star Schema.
+Main analyses:
 
-## `pipeline.py`
+- brand positioning scatter plot using configuration count and median price;
+- logarithmic scales to preserve visibility across highly different brands;
+- brand price distribution using median and interquartile range;
+- detailed drill-down by brand, model, and fuel;
+- minimum, Q1, median, Q3, and maximum price statistics.
 
-Orchestrates:
+## 4. Vehicle Profile & Price Drivers
 
-```text
-extract
--> validate
--> transform
--> Silver
--> Gold Star Schema
--> DuckDB
--> analytical views
-```
+Purpose:
+
+> Which vehicle characteristics are associated with differences in price?
+
+Main analyses:
+
+- median price by model year;
+- fuel mix by vehicle type;
+- median-price heatmap by vehicle type and fuel;
+- decomposition tree for exploratory segmentation by type, fuel, brand, and
+  model.
+
+The report intentionally treats these relationships as **descriptive
+associations**, not causal effects.
 
 ---
 
-# 13. Project Structure
+# 14. Project Structure
 
 ```text
 02_fipe_data_pipeline/
@@ -602,6 +745,12 @@ extract
 │   └── fipe.duckdb
 │
 ├── docs/
+│   ├── images/
+│   │   └── powerbi/
+│   │       ├── fipex_market_overview.png
+│   │       ├── fipex_market_evolution.png
+│   │       ├── fipex_brands_models.png
+│   │       └── fipex_vehicles_prices.png
 │   ├── data_dictionary.md
 │   ├── data_quality_rules.md
 │   └── dimensional_model.dbml
@@ -611,6 +760,11 @@ extract
 │   ├── 02_historical_grain_analysis.ipynb
 │   ├── 03_incremental_load_validation.ipynb
 │   └── 04_sql_analytics.ipynb
+│
+├── powerbi/
+│   ├── fipex_market_analysis.pbip
+│   ├── fipex_market_analysis.Report/
+│   └── fipex_market_analysis.SemanticModel/
 │
 ├── src/
 │   └── fipe_pipeline/
@@ -642,9 +796,116 @@ extract
 └── README.md
 ```
 
+Generated FIPE datasets, DuckDB runtime files, logs, and Power BI local cache
+files are not committed.
+
+Power BI local artifacts ignored by Git include:
+
+```gitignore
+**/.pbi/localSettings.json
+**/.pbi/cache.abf
+```
+
 ---
 
-# 14. Setup
+# 15. Main Modules
+
+## `extract.py`
+
+- discovers FIPEX releases;
+- selects the highest patch for each reference period;
+- selects the original non-merged Parquet asset;
+- downloads source snapshots temporarily;
+- extracts missing monthly Bronze periods;
+- validates remote continuity;
+- supports catch-up execution.
+
+## `validate.py`
+
+- deterministic DQ rules;
+- schema validation;
+- null validation;
+- temporal validation;
+- FIPE-code validation;
+- price validation;
+- duplicate detection;
+- grain validation.
+
+## `transform.py`
+
+- removes excess exact duplicate copies;
+- quarantines invalid records;
+- quarantines non-exact grain collisions;
+- standardizes data types;
+- creates `data_referencia`;
+- adds audit metadata.
+
+## `load.py`
+
+- persists monthly Silver;
+- writes quarantine outputs;
+- writes duplicate audit outputs;
+- supports the historical bootstrap;
+- uses overwrite protection;
+- performs atomic writes.
+
+## `gold.py`
+
+- discovers all trusted Silver partitions;
+- validates continuity and source grain;
+- builds `dim_date`;
+- builds `dim_vehicle`;
+- generates numeric surrogate `vehicle_key`;
+- builds `fct_fipe_prices`;
+- validates dimensional integrity;
+- exports the three Gold Parquet files.
+
+## `duckdb_layer.py`
+
+- registers Silver and Gold Parquet-backed views;
+- validates fact/dimension integrity;
+- validates Silver/Gold reconciliation;
+- persists the DuckDB analytical catalog.
+
+## `analytics_views.py`
+
+Creates reusable SQL views over the Gold Star Schema.
+
+## `pipeline.py`
+
+Orchestrates:
+
+```text
+extract
+-> validate
+-> transform
+-> Silver
+-> Gold Star Schema
+-> DuckDB
+-> analytical SQL views
+```
+
+## `logging_config.py`
+
+Configures console and file logging.
+
+Default log:
+
+```text
+logs/fipe_pipeline.log
+```
+
+## `__main__.py`
+
+CLI entrypoint:
+
+```bash
+python -m fipe_pipeline
+```
+
+---
+
+# 16. Setup
 
 Recommended:
 
@@ -652,14 +913,16 @@ Recommended:
 Python 3.11+
 ```
 
-Create and activate a virtual environment:
+Create and activate a virtual environment.
+
+Windows / Git Bash:
 
 ```bash
 python -m venv .venv
 source .venv/Scripts/activate
 ```
 
-Install:
+Upgrade pip and install the project:
 
 ```bash
 python -m pip install --upgrade pip
@@ -675,7 +938,7 @@ requests
 duckdb
 ```
 
-Development dependencies:
+Development dependencies include:
 
 ```text
 pytest
@@ -684,7 +947,9 @@ ruff
 
 ---
 
-# 15. Run the Pipeline
+# 17. Run the Pipeline
+
+From the project root:
 
 ```bash
 python -m fipe_pipeline
@@ -695,8 +960,9 @@ Normal incremental flow:
 ```text
 new FIPEX month
 -> Bronze
--> DQ
--> Silver
+-> DQ validation
+-> transformation
+-> Silver partition
 -> rebuild Gold Star Schema
 -> refresh DuckDB
 ```
@@ -706,7 +972,7 @@ no-op.
 
 ---
 
-# 16. Tests and Code Quality
+# 18. Tests and Code Quality
 
 Run:
 
@@ -723,33 +989,38 @@ ruff check . --fix
 ruff format .
 ```
 
-The test suite covers:
+The current automated suite contains **44 tests** covering:
 
 - extraction and catch-up;
+- release parsing and highest-patch selection;
+- Bronze inventory and remote-gap protection;
 - DQ rules;
 - quarantine;
 - exact duplicates;
 - grain collisions;
 - Silver partition writes;
+- overwrite protection;
 - Gold dimensional modeling;
 - surrogate key generation;
 - zero-km natural keys;
 - temporal continuity;
 - fact/dimension reconciliation;
 - foreign-key integrity;
+- DuckDB Parquet-backed views;
 - analytical SQL views;
 - pipeline no-op behavior;
 - DuckDB refresh behavior.
 
 ---
 
-# 17. Continuous Integration
+# 19. Continuous Integration
 
 GitHub Actions runs on pushes and pull requests to `main`.
 
 Quality stage:
 
 ```text
+Python 3.11
 ruff check .
 ruff format --check .
 ```
@@ -762,9 +1033,12 @@ Python 3.12
 pytest -v
 ```
 
+This validates the project in a clean Linux environment independent of the
+local development machine.
+
 ---
 
-# 18. Documentation
+# 20. Documentation
 
 Additional documentation:
 
@@ -774,19 +1048,26 @@ docs/data_quality_rules.md
 docs/dimensional_model.dbml
 ```
 
-The DBML file documents the exact Power BI dimensional model.
+The data dictionary documents source and Gold analytical fields.
+
+The DQ document defines implemented rule IDs, severities, actions, and
+transformation behavior.
+
+The DBML file documents the dimensional model used by DuckDB and Power BI.
 
 ---
 
-# 19. Key Engineering Decisions
+# 21. Key Engineering Decisions
 
 ## Preserve raw history
 
-Bronze and Silver preserve source history rather than silently rewriting it.
+Bronze and Silver preserve historical source representation rather than
+silently rewriting it.
 
 ## No silent imputation
 
-Unknown or invalid values are quarantined instead of invented.
+Unknown, invalid, or ambiguous source values are quarantined instead of
+invented.
 
 ## Integer cents
 
@@ -797,24 +1078,42 @@ Unknown or invalid values are quarantined instead of invented.
 Power BI relationships use a compact numeric surrogate key instead of a
 concatenated business identifier.
 
-## Star Schema in Gold
+## Star Schema upstream
 
-The dimensional model is produced upstream, not reconstructed manually inside
-Power BI.
+The dimensional model is produced in the Data Engineering pipeline rather than
+being reconstructed manually inside Power BI.
 
 ## Latest labels in `dim_vehicle`
 
-Historical descriptive labels remain in Silver. The analytical dimension keeps
-the latest trusted label for each vehicle natural key.
+Historical descriptive labels remain preserved in Silver.
+
+The analytical dimension keeps the latest trusted descriptive label for each
+vehicle natural key.
 
 ## DuckDB over Parquet
 
-DuckDB provides SQL semantics and validation while Parquet remains the primary
-analytical storage format.
+DuckDB provides SQL semantics, integrity validation, and BI connectivity while
+Parquet remains the primary analytical storage format.
+
+## Snapshot vs. longitudinal analysis
+
+Cross-sectional BI pages use a single FIPE reference month to prevent
+financial values from different periods from being mixed in the same
+distribution.
+
+Historical evolution is handled separately through explicit temporal
+aggregation.
+
+## Inflation context without conflating measures
+
+IPCA is used to provide macroeconomic context for long-term price analysis.
+
+FIPE prices and inflation remain separate measures with different units and
+semantics.
 
 ---
 
-# 20. Tech Stack
+# 22. Tech Stack
 
 ```text
 Python
@@ -825,36 +1124,43 @@ Requests
 GitHub Releases API
 DuckDB
 SQL
+ODBC
 Pytest
 Ruff
 GitHub Actions
 DBML
 Power BI
+DAX
+Power Query
+TMDL / PBIP
 Git / GitHub
 ```
 
 ---
 
-# 21. Project Status
+# 23. Project Status
 
 ```text
-Historical bootstrap:       complete
-Incremental extraction:     complete
-Data-quality validation:    complete
-Transformation layer:       complete
-Partitioned Silver load:    complete
-Gold Star Schema:           complete
-dim_date:                   complete
-dim_vehicle:                complete
-fct_fipe_prices:            complete
-DuckDB analytical layer:    complete
-Reusable SQL views:         complete
-Logging:                    complete
-CLI entrypoint:             complete
-Automated tests:            complete
-Ruff code quality checks:   complete
-GitHub Actions CI:          complete
-Power BI connection/model:  next step
+Historical bootstrap:          complete
+Incremental extraction:        complete
+Data-quality validation:       complete
+Transformation layer:          complete
+Partitioned Silver load:       complete
+Gold Star Schema:              complete
+dim_date:                      complete
+dim_vehicle:                   complete
+fct_fipe_prices:               complete
+DuckDB analytical layer:       complete
+Reusable SQL views:            complete
+Logging:                       complete
+CLI entrypoint:                complete
+Automated tests:               complete
+Ruff code quality checks:      complete
+GitHub Actions CI:             complete
+Power BI semantic model:       complete
+Power BI analytical report:    complete
+Dashboard screenshots:         complete
+Public Power BI publication:   pending
 ```
 
 Primary commands:
