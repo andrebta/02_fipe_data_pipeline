@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Callable
 
 import pandas as pd
@@ -39,15 +39,9 @@ class ValidationResult:
     message: str
 
     def to_dict(self) -> dict:
-        return {
-            "rule": self.rule,
-            "passed": self.passed,
-            "invalid_rows": self.invalid_rows,
-            "severity": self.severity,
-            "action": self.action,
-            "effective_action": ("NONE" if self.passed else self.action),
-            "message": self.message,
-        }
+        result = asdict(self)
+        result["effective_action"] = "NONE" if self.passed else self.action
+        return result
 
 
 def validate_required_columns(df: pd.DataFrame) -> ValidationResult:
