@@ -467,6 +467,20 @@ Not every integrity check in the project is represented by a `DQ-*` row rule.
 
 A remote continuity gap raises an extraction error.
 
+## HTTP extraction integrity
+
+GitHub API and asset downloads use bounded exponential retry for transient
+network failures and HTTP `429`, `500`, `502`, `503`, and `504` responses.
+
+Downloaded release assets are validated against the GitHub release metadata
+size when available and must also be readable Parquet files.
+
+## Historical bootstrap integrity
+
+A fresh bootstrap downloads the latest complete unmerged FIPEX snapshot and
+validates that the latest period contained in the snapshot matches the release
+period before promoting it to historical Bronze.
+
 ## Local Bronze inventory
 
 Monthly Bronze files are inspected to ensure each represents exactly one reference period.
