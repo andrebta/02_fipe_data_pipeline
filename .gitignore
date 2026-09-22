@@ -1,10 +1,21 @@
+# Virtual environment
 .venv/
+
+# Python cache
 __pycache__/
 *.py[cod]
-.pytest_cache/
 *.egg-info/
 
-# Generated data
+# Pytest
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# Data layers
 data/bronze/
 data/silver/
 data/gold/
