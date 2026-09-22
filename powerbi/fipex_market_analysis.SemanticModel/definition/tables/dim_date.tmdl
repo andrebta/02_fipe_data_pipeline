@@ -74,7 +74,6 @@ table dim_date
 		lineageTag: 070e9cc1-8c81-43b9-96c2-4c1da7fa838f
 		summarizeBy: none
 
-
 		changedProperty = DataType
 
 		annotation SummarizationSetBy = Automatic

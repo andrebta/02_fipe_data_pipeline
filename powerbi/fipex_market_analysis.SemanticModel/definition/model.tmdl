@@ -20,4 +20,5 @@ ref table fct_ipca
 ref table _medidas
 ref table 'Granularidade Data'
 
+ref cultureInfo en-US
 
