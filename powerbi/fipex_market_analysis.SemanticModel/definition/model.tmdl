@@ -7,7 +7,7 @@ model Model
 		legacyRedirects
 		returnErrorValuesAsNull
 
-annotation __PBI_TimeIntelligenceEnabled = 1
+annotation __PBI_TimeIntelligenceEnabled = 0
 
 annotation PBI_QueryOrder = ["fct_fipe_prices","dim_vehicle","dim_date","fct_ipca"]
 
@@ -18,9 +18,6 @@ ref table dim_vehicle
 ref table dim_date
 ref table fct_ipca
 ref table _medidas
-ref table DateTableTemplate_e1bf0e66-c7f0-4473-87e3-7e3f0fa38265
-ref table LocalDateTable_203cb97d-66a4-474d-a2f6-ff0df1612fa9
 ref table 'Granularidade Data'
 
-ref cultureInfo en-US
 
