@@ -6,11 +6,6 @@ relationship AutoDetected_451d0602-ff4d-491b-a257-2ff842e35214
 	fromColumn: fct_fipe_prices.vehicle_key
 	toColumn: dim_vehicle.vehicle_key
 
-relationship 4192ae53-6f63-43ee-ab96-9f1dd078bb76
-	joinOnDateBehavior: datePartOnly
-	fromColumn: dim_date.data
-	toColumn: LocalDateTable_203cb97d-66a4-474d-a2f6-ff0df1612fa9.Date
-
 relationship 80b79e50-119b-490d-bc76-c43adba111e1
 	fromColumn: fct_ipca.date_key
 	toColumn: dim_date.date_key
