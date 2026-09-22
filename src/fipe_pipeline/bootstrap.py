@@ -55,9 +55,7 @@ def _raise_on_blocking_validation(validation_report: pd.DataFrame) -> None:
         return
 
     rules = blocking["rule"].tolist()
-    raise RuntimeError(
-        f"Historical bootstrap blocked by data-quality rules: {rules}"
-    )
+    raise RuntimeError(f"Historical bootstrap blocked by data-quality rules: {rules}")
 
 
 def run_historical_bootstrap(
@@ -101,8 +99,7 @@ def run_historical_bootstrap(
     duplicate_rows = len(transform_result.duplicates)
 
     LOGGER.info(
-        "Historical transformation completed: silver=%s quarantine=%s "
-        "duplicates=%s",
+        "Historical transformation completed: silver=%s quarantine=%s duplicates=%s",
         silver_rows,
         quarantine_rows,
         duplicate_rows,
@@ -137,8 +134,7 @@ def run_historical_bootstrap(
     )
 
     LOGGER.info(
-        "Historical FIPE bootstrap completed: periods=%s fact_rows=%s "
-        "vehicles=%s",
+        "Historical FIPE bootstrap completed: periods=%s fact_rows=%s vehicles=%s",
         len(load_result.partition_results),
         gold_result.fact_rows,
         gold_result.vehicle_rows,
