@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fipe-data-pipeline"
 version = "0.1.0"
-description = "Incremental data engineering pipeline for historical FIPE vehicle price data."
+description = "Historical and incremental FIPE data engineering and analytics pipeline."
 readme = "README.md"
 requires-python = ">=3.11"
 
@@ -15,6 +15,10 @@ dependencies = [
     "requests>=2.31",
     "duckdb>=1.1",
 ]
+
+
+[project.scripts]
+fipe-pipeline = "fipe_pipeline.__main__:main"
 
 [project.optional-dependencies]
 dev = [

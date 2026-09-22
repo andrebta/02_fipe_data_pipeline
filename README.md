@@ -771,6 +771,7 @@ associations**, not causal effects.
 │       ├── __init__.py
 │       ├── __main__.py
 │       ├── analytics_views.py
+│       ├── bootstrap.py
 │       ├── duckdb_layer.py
 │       ├── extract.py
 │       ├── gold.py
@@ -783,7 +784,9 @@ associations**, not causal effects.
 ├── tests/
 │   ├── conftest.py
 │   ├── test_analytics_views.py
+│   ├── test_bootstrap.py
 │   ├── test_duckdb_layer.py
+│   ├── test_end_to_end.py
 │   ├── test_extract.py
 │   ├── test_gold.py
 │   ├── test_load.py
@@ -803,6 +806,7 @@ Power BI local artifacts ignored by Git include:
 
 ```gitignore
 **/.pbi/localSettings.json
+**/.pbi/editorSettings.json
 **/.pbi/cache.abf
 ```
 
@@ -815,8 +819,11 @@ Power BI local artifacts ignored by Git include:
 - discovers FIPEX releases;
 - selects the highest patch for each reference period;
 - selects the original non-merged Parquet asset;
+- retries transient GitHub/network failures with bounded exponential backoff;
+- validates downloaded asset size against release metadata when available;
 - downloads source snapshots temporarily;
 - extracts missing monthly Bronze periods;
+- downloads the latest complete snapshot for historical bootstrap;
 - validates remote continuity;
 - supports catch-up execution.
 
@@ -871,6 +878,20 @@ Power BI local artifacts ignored by Git include:
 
 Creates reusable SQL views over the Gold Star Schema.
 
+## `bootstrap.py`
+
+Orchestrates a fresh-clone historical rebuild:
+
+```text
+latest complete FIPEX snapshot
+-> historical Bronze
+-> DQ validation
+-> Silver monthly partitions
+-> quarantine / duplicate audit
+-> Gold Star Schema
+-> DuckDB catalog
+```
+
 ## `pipeline.py`
 
 Orchestrates:
@@ -901,6 +922,15 @@ CLI entrypoint:
 
 ```bash
 python -m fipe_pipeline
+python -m fipe_pipeline run
+python -m fipe_pipeline bootstrap
+```
+
+After an editable install, the equivalent console entrypoint is:
+
+```bash
+fipe-pipeline run
+fipe-pipeline bootstrap
 ```
 
 ---
@@ -947,7 +977,97 @@ ruff
 
 ---
 
-# 17. Run the Pipeline
+# 17. Reproduce the Project from a Fresh Clone
+
+Generated datasets are intentionally excluded from Git. A fresh clone can
+rebuild the complete local analytical stack from the latest FIPEX release.
+
+Install the project first:
+
+```bash
+python -m pip install --upgrade pip
+pip install -e ".[dev]"
+```
+
+Then run the historical bootstrap:
+
+```bash
+python -m fipe_pipeline bootstrap
+```
+
+The bootstrap performs:
+
+```text
+latest complete FIPEX snapshot
+-> historical Bronze
+-> DQ validation
+-> Silver monthly partitions
+-> quarantine / duplicate audit
+-> Gold Star Schema
+-> DuckDB catalog
+```
+
+The command is overwrite-protected. Intentional full reprocessing must be
+explicit:
+
+```bash
+python -m fipe_pipeline bootstrap --overwrite
+```
+
+After the initial bootstrap, normal operation is incremental:
+
+```bash
+python -m fipe_pipeline
+# or
+python -m fipe_pipeline run
+```
+
+---
+
+# 18. Power BI Local Setup
+
+The PBIP project expects a 64-bit DuckDB ODBC data source named:
+
+```text
+FIPE_DuckDB
+```
+
+Configure the DSN to point to:
+
+```text
+<project-root>\data\fipe.duckdb
+```
+
+Recommended DSN setting:
+
+```text
+access_mode = READ_ONLY
+```
+
+For DuckDB ODBC stability on Windows:
+
+```text
+File
+-> Options and settings
+-> Options
+-> Current File
+-> Data Load
+-> Parallel loading of tables = One
+```
+
+The normal local workflow is:
+
+```text
+python -m fipe_pipeline
+-> pipeline closes DuckDB
+-> Power BI refresh
+```
+
+Power BI local cache and editor settings are intentionally excluded from Git.
+
+---
+
+# 19. Run the Incremental Pipeline
 
 From the project root:
 
@@ -972,7 +1092,7 @@ no-op.
 
 ---
 
-# 18. Tests and Code Quality
+# 20. Tests and Code Quality
 
 Run:
 
@@ -989,7 +1109,7 @@ ruff check . --fix
 ruff format .
 ```
 
-The current automated suite contains **44 tests** covering:
+The automated suite contains **49 tests** covering:
 
 - extraction and catch-up;
 - release parsing and highest-patch selection;
@@ -1009,11 +1129,14 @@ The current automated suite contains **44 tests** covering:
 - DuckDB Parquet-backed views;
 - analytical SQL views;
 - pipeline no-op behavior;
-- DuckDB refresh behavior.
+- DuckDB refresh behavior;
+- historical bootstrap orchestration;
+- an offline Bronze-to-DuckDB end-to-end smoke test;
+- transient HTTP retry and download-size validation.
 
 ---
 
-# 19. Continuous Integration
+# 21. Continuous Integration
 
 GitHub Actions runs on pushes and pull requests to `main`.
 
@@ -1038,7 +1161,7 @@ local development machine.
 
 ---
 
-# 20. Documentation
+# 22. Documentation
 
 Additional documentation:
 
@@ -1057,7 +1180,7 @@ The DBML file documents the dimensional model used by DuckDB and Power BI.
 
 ---
 
-# 21. Key Engineering Decisions
+# 23. Key Engineering Decisions
 
 ## Preserve raw history
 
@@ -1077,6 +1200,10 @@ invented.
 
 Power BI relationships use a compact numeric surrogate key instead of a
 concatenated business identifier.
+
+The current Gold build regenerates this mapping from the complete trusted
+snapshot. The key is internally consistent within a build, but it should not
+be treated as a permanent external identifier across independent Gold rebuilds.
 
 ## Star Schema upstream
 
@@ -1113,7 +1240,7 @@ semantics.
 
 ---
 
-# 22. Tech Stack
+# 24. Tech Stack
 
 ```text
 Python
@@ -1138,7 +1265,7 @@ Git / GitHub
 
 ---
 
-# 23. Project Status
+# 25. Project Status
 
 ```text
 Historical bootstrap:          complete
@@ -1157,6 +1284,9 @@ CLI entrypoint:                complete
 Automated tests:               complete
 Ruff code quality checks:      complete
 GitHub Actions CI:             complete
+Historical bootstrap CLI:      complete
+HTTP retry/backoff:             complete
+Offline end-to-end smoke test: complete
 Power BI semantic model:       complete
 Power BI analytical report:    complete
 Dashboard screenshots:         complete

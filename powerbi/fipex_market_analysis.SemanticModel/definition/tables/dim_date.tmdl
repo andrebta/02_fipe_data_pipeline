@@ -74,11 +74,6 @@ table dim_date
 		lineageTag: 070e9cc1-8c81-43b9-96c2-4c1da7fa838f
 		summarizeBy: none
 
-		variation Variation
-			isDefault
-			relationship: 4192ae53-6f63-43ee-ab96-9f1dd078bb76
-			defaultHierarchy: LocalDateTable_203cb97d-66a4-474d-a2f6-ff0df1612fa9.'Date Hierarchy'
-
 		changedProperty = DataType
 
 		annotation SummarizationSetBy = Automatic

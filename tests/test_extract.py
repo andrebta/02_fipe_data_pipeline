@@ -15,6 +15,7 @@ from fipe_pipeline.extract import (
     SourceNotAvailableError,
     build_monthly_destination,
     build_release_tag,
+    extract_latest_historical_snapshot,
     extract_missing_months,
     extract_month,
     find_missing_periods,
@@ -347,7 +348,7 @@ def test_extract_month_downloads_filters_and_cleans_temp_files(
             {
                 "name": "fipex-prices-latest.parquet",
                 "browser_download_url": "https://example.test/file",
-                "size": 123,
+                "size": None,
             }
         ],
     }
@@ -479,3 +480,100 @@ def test_extract_missing_months_only_processes_missing_release(
     assert calls == [(2026, 10, 1, False)]
 
     assert len(result.extraction_results) == 1
+
+
+def test_request_with_retry_retries_transient_status(monkeypatch):
+    responses = [
+        FakeResponse(payload={}, status_code=503),
+        FakeResponse(payload={"ok": True}, status_code=200),
+    ]
+    calls = []
+
+    def fake_get(*args, **kwargs):
+        calls.append((args, kwargs))
+        return responses.pop(0)
+
+    monkeypatch.setattr(extract_module.requests, "get", fake_get)
+    monkeypatch.setattr(extract_module.time, "sleep", lambda _: None)
+
+    response = extract_module._request_with_retry(
+        "https://example.test/resource",
+        timeout=(1, 1),
+        max_retries=2,
+        backoff_seconds=0,
+    )
+
+    assert response.status_code == 200
+    assert len(calls) == 2
+
+
+def test_validate_downloaded_snapshot_rejects_size_mismatch(tmp_path):
+    path = tmp_path / "snapshot.parquet"
+
+    pd.DataFrame(
+        {
+            "ano_referencia": [2026],
+            "mes_referencia": [9],
+        }
+    ).to_parquet(path, index=False)
+
+    with pytest.raises(
+        DownloadValidationError,
+        match="size does not match",
+    ):
+        extract_module._validate_downloaded_snapshot(
+            path,
+            expected_size_bytes=path.stat().st_size + 1,
+        )
+
+
+def test_extract_latest_historical_snapshot(tmp_path, monkeypatch):
+    release = _release(2026, 9, patch=1)
+
+    monkeypatch.setattr(
+        extract_module,
+        "list_available_releases",
+        lambda **kwargs: [release],
+    )
+
+    metadata = {
+        "html_url": "https://example.test/release",
+        "assets": [
+            {
+                "name": "fipex-prices-latest.parquet",
+                "browser_download_url": "https://example.test/file",
+                "size": None,
+            }
+        ],
+    }
+
+    monkeypatch.setattr(
+        extract_module,
+        "_request_release_metadata_by_tag",
+        lambda *args, **kwargs: metadata,
+    )
+
+    def fake_download(asset, temporary_path: Path, **kwargs):
+        pd.DataFrame(
+            {
+                "ano_referencia": [2001, 2026],
+                "mes_referencia": [1, 9],
+                "codigo_fipe": ["001001-1", "001002-0"],
+            }
+        ).to_parquet(temporary_path, index=False)
+
+    monkeypatch.setattr(
+        extract_module,
+        "_download_release_asset",
+        fake_download,
+    )
+
+    result = extract_latest_historical_snapshot(
+        destination_dir=tmp_path,
+    )
+
+    assert result.status == "downloaded"
+    assert result.latest_period == Period(2026, 9)
+    assert result.destination.name == "fipe_history_2026_09.parquet"
+    assert result.destination.exists()
+    assert not result.destination.with_suffix(".part").exists()

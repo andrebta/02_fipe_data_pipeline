@@ -34,19 +34,6 @@ table fct_fipe_prices
 
 		annotation SummarizationSetBy = Automatic
 
-	column valor_reais
-		dataType: decimal
-		formatString: "R$"\ #,0.###############;-"R$"\ #,0.###############;"R$"\ #,0.###############
-		lineageTag: ddc5980f-6375-467a-9746-d213b975e0cd
-		summarizeBy: sum
-		sourceColumn: valor_reais
-
-		changedProperty = IsHidden
-
-		annotation SummarizationSetBy = Automatic
-
-		annotation PBI_FormatHint = {"currencyCulture":"pt-BR"}
-
 	column faixa_preco =
 			
 			VAR Price =
@@ -106,11 +93,9 @@ table fct_fipe_prices
 				    Source = Odbc.DataSource("dsn=FIPE_DuckDB", [HierarchicalNavigation=true]),
 				    fipe_Database = Source{[Name="fipe",Kind="Database"]}[Data],
 				    main_Schema = fipe_Database{[Name="main",Kind="Schema"]}[Data],
-				    fct_fipe_prices_View = main_Schema{[Name="fct_fipe_prices",Kind="View"]}[Data],
-				    #"Added Custom" = Table.AddColumn(fct_fipe_prices_View, "valor_reais", each [valor_centavos]/100),
-				    #"Changed Type" = Table.TransformColumnTypes(#"Added Custom",{{"valor_reais", Currency.Type}})
+				    fct_fipe_prices_View = main_Schema{[Name="fct_fipe_prices",Kind="View"]}[Data]
 				in
-				    #"Changed Type"
+				    fct_fipe_prices_View
 
 	annotation PBI_NavigationStepName = Navigation
 

@@ -4,6 +4,7 @@
 # Python cache
 __pycache__/
 *.py[cod]
+*.egg-info/
 
 # Pytest
 .pytest_cache/
@@ -40,4 +41,5 @@ Thumbs.db
 
 # Power BI local files
 **/.pbi/localSettings.json
+**/.pbi/editorSettings.json
 **/.pbi/cache.abf
