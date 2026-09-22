@@ -1,12 +1,6 @@
 table _medidas
 	lineageTag: a3266383-463f-432e-a569-01e75128f0ab
 
-	measure preco_medio = DIVIDE(AVERAGE(fct_fipe_prices[valor_centavos]), 100)
-		formatString: "R$"\ #,0.###############;-"R$"\ #,0.###############;"R$"\ #,0.###############
-		lineageTag: f2ca7c43-623d-4c23-85ae-60f2c7107833
-
-		annotation PBI_FormatHint = {"currencyCulture":"pt-BR"}
-
 	measure qtd_veiculos =
 			
 			DISTINCTCOUNT(fct_fipe_prices[vehicle_key])
@@ -30,84 +24,11 @@ table _medidas
 
 		annotation PBI_FormatHint = {"isDecimal":true}
 
-	measure qtd_reg_precos = COUNTROWS(fct_fipe_prices)
-		formatString: 0
-		lineageTag: 7c07c545-dcce-44df-af36-909f477f8d4c
-
-		annotation PBI_FormatHint = {"isDecimal":true}
-
-	measure chave_data_recente = MAX(fct_fipe_prices[date_key])
-		formatString: 0
-		lineageTag: 0b04e63e-c4a4-4130-a230-5a44f14ee6e6
-
-	measure mediana_preco_variacao_% =
-			
-			VAR CurrentPrice =
-			    [mediana_preco]
-			
-			VAR PreviousPrice =
-			    SWITCH(
-			        TRUE(),
-			
-			        ISINSCOPE(dim_date[data]),
-			            CALCULATE(
-			                [mediana_preco],
-			                REMOVEFILTERS(dim_date),
-			                DATEADD(dim_date[data], -1, MONTH)
-			            ),
-			
-			        ISINSCOPE(dim_date[ano_trimestre]),
-			            CALCULATE(
-			                [mediana_preco],
-			                REMOVEFILTERS(dim_date),
-			                DATEADD(dim_date[data], -1, QUARTER)
-			            ),
-			
-			        ISINSCOPE(dim_date[ano_referencia]),
-			            CALCULATE(
-			                [mediana_preco],
-			                REMOVEFILTERS(dim_date),
-			                DATEADD(dim_date[data], -1, YEAR)
-			            )
-			    )
-			
-			RETURN
-			    DIVIDE(
-			        CurrentPrice - PreviousPrice,
-			        PreviousPrice
-			    )
-		formatString: 0.00%;-0.00%;0.00%
-		lineageTag: 26f5fe1e-b69a-46b8-b6f2-264d3620a136
-
 	measure mediana_preco = DIVIDE(MEDIAN(fct_fipe_prices[valor_centavos]), 100)
 		formatString: "R$"\ #,0.###############;-"R$"\ #,0.###############;"R$"\ #,0.###############
 		lineageTag: 0a7feaf3-aecb-4602-aa8b-17d367b1cea3
 
 		annotation PBI_FormatHint = {"currencyCulture":"pt-BR"}
-
-	measure rank_marca_mediana_preco =
-			
-			VAR MinVeiculos = 10
-			
-			VAR MarcasElegiveis =
-			    FILTER(
-			        ALLSELECTED(dim_vehicle[nome_marca]),
-			        CALCULATE([qtd_veiculos]) >= MinVeiculos
-			    )
-			
-			RETURN
-			IF(
-			    [qtd_veiculos] >= MinVeiculos,
-			    RANKX(
-			        MarcasElegiveis,
-			        CALCULATE([mediana_preco]),
-			        ,
-			        DESC,
-			        DENSE
-			    )
-			)
-		formatString: 0
-		lineageTag: 6de3a41c-b10e-4395-a8d1-5d1ce7e6034b
 
 	measure qtd_veiculos_variacao_% =
 			
@@ -311,24 +232,6 @@ table _medidas
 			    )
 		formatString: 0.0%;-0.0%;0.0%
 		lineageTag: 076e1e52-6175-466b-8c21-2bac107e0735
-
-	measure ipca_mensal_% = MAX(fct_ipca[ipca_mensal_pct])
-		formatString: 0.00%;-0.00%;0.00%
-		lineageTag: d625014a-0a7a-4885-b0e7-9cf5615bc8c0
-
-	measure ipca_ultimo_mes_disponivel =
-			FORMAT(
-			    CALCULATE(
-			        MAX(fct_ipca[data]),
-			        REMOVEFILTERS(dim_date)
-			    ),
-			    "mmm/yyyy"
-			)
-		lineageTag: 53c12ec9-e313-4b75-8dee-f9f7b81e1871
-
-	measure ano_modelo_eixo = MAX(dim_vehicle[ano_modelo])
-		formatString: 0
-		lineageTag: 328beab3-eec1-45ab-9302-7c64b4ff53cf
 
 	measure preco_q1_periodo =
 			VAR ReferenceDateKey =
