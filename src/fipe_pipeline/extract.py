@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -19,6 +20,9 @@ DEFAULT_BRONZE_MONTHLY_DIR = PROJECT_ROOT / "data" / "bronze" / "monthly"
 
 DEFAULT_CHUNK_SIZE = 1024 * 1024
 DEFAULT_TIMEOUT = (10, 180)
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_BACKOFF_SECONDS = 0.5
+RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
 
 RELEASE_TAG_PATTERN = re.compile(
     r"^v(?P<year>\d{4})\.(?P<month>\d{2})\.(?P<patch>\d+)$"
@@ -103,6 +107,18 @@ class CatchUpResult:
     extraction_results: tuple[ExtractionResult, ...]
 
 
+@dataclass(frozen=True)
+class HistoricalExtractionResult:
+    latest_period: Period
+    release_tag: str
+    release_url: str
+    asset_name: str
+    asset_download_url: str
+    destination: Path
+    status: str
+    size_bytes: int
+
+
 def _validate_period(year: int, month: int) -> None:
     if year < 2000:
         raise ValueError("year must be >= 2000.")
@@ -120,6 +136,58 @@ def _github_headers() -> dict[str, str]:
     if token:
         headers["Authorization"] = f"Bearer {token}"
     return headers
+
+
+def _request_with_retry(
+    url: str,
+    *,
+    timeout: tuple[int, int],
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    backoff_seconds: float = DEFAULT_BACKOFF_SECONDS,
+    **kwargs,
+):
+    """Perform a GET request with bounded exponential backoff.
+
+    Retries are limited to transient network failures and HTTP status codes
+    that commonly represent temporary rate limiting or upstream outages.
+    """
+
+    if max_retries < 0:
+        raise ValueError("max_retries must be >= 0.")
+    if backoff_seconds < 0:
+        raise ValueError("backoff_seconds must be >= 0.")
+
+    last_exception: requests.RequestException | None = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            response = requests.get(
+                url,
+                timeout=timeout,
+                **kwargs,
+            )
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            last_exception = exc
+            if attempt >= max_retries:
+                raise
+        else:
+            if (
+                response.status_code not in RETRY_STATUS_CODES
+                or attempt >= max_retries
+            ):
+                return response
+
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
+
+        if backoff_seconds:
+            time.sleep(backoff_seconds * (2**attempt))
+
+    if last_exception is not None:
+        raise last_exception
+
+    raise ExtractionError(f"Request retry loop failed unexpectedly: {url}")
 
 
 def build_release_tag(year: int, month: int, patch: int = 0) -> str:
@@ -166,7 +234,7 @@ def list_available_releases(
 
     while True:
         try:
-            response = requests.get(
+            response = _request_with_retry(
                 endpoint,
                 headers=_github_headers(),
                 params={"per_page": 100, "page": page},
@@ -219,7 +287,7 @@ def _request_release_metadata_by_tag(
     )
 
     try:
-        response = requests.get(
+        response = _request_with_retry(
             api_url,
             headers=_github_headers(),
             timeout=timeout,
@@ -289,7 +357,7 @@ def _download_release_asset(
     chunk_size: int = DEFAULT_CHUNK_SIZE,
 ) -> None:
     try:
-        with requests.get(
+        with _request_with_retry(
             asset.download_url,
             headers={"User-Agent": "fipe-data-pipeline"},
             stream=True,
@@ -307,9 +375,22 @@ def _download_release_asset(
         ) from exc
 
 
-def _validate_downloaded_snapshot(path: Path) -> None:
+def _validate_downloaded_snapshot(
+    path: Path,
+    *,
+    expected_size_bytes: int | None = None,
+) -> None:
     if not path.exists() or path.stat().st_size == 0:
         raise DownloadValidationError(f"Invalid downloaded file: {path}")
+
+    if (
+        expected_size_bytes is not None
+        and path.stat().st_size != expected_size_bytes
+    ):
+        raise DownloadValidationError(
+            "Downloaded asset size does not match release metadata. "
+            f"expected={expected_size_bytes} actual={path.stat().st_size}"
+        )
 
     try:
         pd.read_parquet(path, columns=["ano_referencia", "mes_referencia"])
@@ -577,7 +658,10 @@ def extract_month(
             timeout=timeout,
             chunk_size=chunk_size,
         )
-        _validate_downloaded_snapshot(snapshot_temp)
+        _validate_downloaded_snapshot(
+            snapshot_temp,
+            expected_size_bytes=asset.size_bytes,
+        )
 
         monthly_df = _extract_requested_month(snapshot_temp, year, month)
         monthly_df.to_parquet(monthly_temp, index=False)
@@ -604,6 +688,111 @@ def extract_month(
         destination=destination,
         status="downloaded",
         rows=rows,
+        size_bytes=destination.stat().st_size,
+    )
+
+
+def extract_latest_historical_snapshot(
+    destination_dir: Path | str = DEFAULT_BRONZE_HISTORICAL_DIR,
+    *,
+    overwrite: bool = False,
+    timeout: tuple[int, int] = DEFAULT_TIMEOUT,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+) -> HistoricalExtractionResult:
+    """Download the latest complete FIPEX snapshot for a fresh bootstrap."""
+
+    releases = list_available_releases(timeout=timeout)
+    if not releases:
+        raise SourceNotAvailableError("No FIPEX monthly releases are available.")
+
+    latest_release = releases[-1]
+    destination_dir = Path(destination_dir)
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    destination = destination_dir / (
+        f"fipe_history_{latest_release.period.year:04d}_"
+        f"{latest_release.period.month:02d}.parquet"
+    )
+
+    if destination.exists() and not overwrite:
+        _validate_downloaded_snapshot(destination)
+        watermark = get_historical_watermark(destination_dir)
+        if watermark != latest_release.period:
+            raise DownloadValidationError(
+                "Existing historical snapshot watermark does not match the "
+                "latest FIPEX release. "
+                f"expected={latest_release.period.label} "
+                f"observed={watermark.label if watermark else None}"
+            )
+
+        return HistoricalExtractionResult(
+            latest_period=latest_release.period,
+            release_tag=latest_release.tag,
+            release_url=latest_release.release_url,
+            asset_name="existing_local_file",
+            asset_download_url="",
+            destination=destination,
+            status="already_exists",
+            size_bytes=destination.stat().st_size,
+        )
+
+    release_metadata = _request_release_metadata_by_tag(
+        latest_release.tag,
+        timeout=timeout,
+    )
+    asset = _select_original_parquet_asset(release_metadata)
+    temporary_path = destination.with_suffix(".part")
+
+    if temporary_path.exists():
+        temporary_path.unlink()
+
+    try:
+        _download_release_asset(
+            asset,
+            temporary_path,
+            timeout=timeout,
+            chunk_size=chunk_size,
+        )
+        _validate_downloaded_snapshot(
+            temporary_path,
+            expected_size_bytes=asset.size_bytes,
+        )
+
+        period_df = pd.read_parquet(
+            temporary_path,
+            columns=["ano_referencia", "mes_referencia"],
+        )
+        latest_observed = (
+            period_df[["ano_referencia", "mes_referencia"]]
+            .drop_duplicates()
+            .sort_values(["ano_referencia", "mes_referencia"])
+            .iloc[-1]
+        )
+        observed_period = Period(
+            int(latest_observed["ano_referencia"]),
+            int(latest_observed["mes_referencia"]),
+        )
+
+        if observed_period != latest_release.period:
+            raise DownloadValidationError(
+                "Historical snapshot watermark does not match its release. "
+                f"expected={latest_release.period.label} "
+                f"observed={observed_period.label}"
+            )
+
+        os.replace(temporary_path, destination)
+    except Exception:
+        if temporary_path.exists():
+            temporary_path.unlink()
+        raise
+
+    return HistoricalExtractionResult(
+        latest_period=latest_release.period,
+        release_tag=latest_release.tag,
+        release_url=str(release_metadata["html_url"]),
+        asset_name=asset.name,
+        asset_download_url=asset.download_url,
+        destination=destination,
+        status="downloaded",
         size_bytes=destination.stat().st_size,
     )
 
