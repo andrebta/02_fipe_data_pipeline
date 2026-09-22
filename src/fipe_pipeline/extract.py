@@ -171,10 +171,7 @@ def _request_with_retry(
             if attempt >= max_retries:
                 raise
         else:
-            if (
-                response.status_code not in RETRY_STATUS_CODES
-                or attempt >= max_retries
-            ):
+            if response.status_code not in RETRY_STATUS_CODES or attempt >= max_retries:
                 return response
 
             close = getattr(response, "close", None)
@@ -383,10 +380,7 @@ def _validate_downloaded_snapshot(
     if not path.exists() or path.stat().st_size == 0:
         raise DownloadValidationError(f"Invalid downloaded file: {path}")
 
-    if (
-        expected_size_bytes is not None
-        and path.stat().st_size != expected_size_bytes
-    ):
+    if expected_size_bytes is not None and path.stat().st_size != expected_size_bytes:
         raise DownloadValidationError(
             "Downloaded asset size does not match release metadata. "
             f"expected={expected_size_bytes} actual={path.stat().st_size}"
