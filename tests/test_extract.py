@@ -348,7 +348,7 @@ def test_extract_month_downloads_filters_and_cleans_temp_files(
             {
                 "name": "fipex-prices-latest.parquet",
                 "browser_download_url": "https://example.test/file",
-                "size": 123,
+                "size": None,
             }
         ],
     }
