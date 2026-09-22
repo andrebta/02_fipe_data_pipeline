@@ -482,7 +482,6 @@ def test_extract_missing_months_only_processes_missing_release(
     assert len(result.extraction_results) == 1
 
 
-
 def test_request_with_retry_retries_transient_status(monkeypatch):
     responses = [
         FakeResponse(payload={}, status_code=503),
