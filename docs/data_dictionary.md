@@ -80,6 +80,12 @@ It is therefore **not random**. It is a deterministic sequential surrogate key w
 
 The same `vehicle_key` is stored in `fct_fipe_prices`, allowing the same analytical vehicle configuration to be related across FIPE reference months.
 
+The current Gold build regenerates the surrogate mapping from the complete
+trusted snapshot. Therefore `vehicle_key` is guaranteed to be internally
+consistent within each Gold build, but it should not be treated as a permanent
+external identifier across independently rebuilt snapshots. Fact and dimension
+artifacts are always regenerated together.
+
 ---
 
 ## 3. Source Column Dictionary
