@@ -1,7 +1,7 @@
 table _medidas
 	lineageTag: a3266383-463f-432e-a569-01e75128f0ab
 
-	measure preco_medio = AVERAGE(fct_fipe_prices[valor_reais])
+	measure preco_medio = DIVIDE(AVERAGE(fct_fipe_prices[valor_centavos]), 100)
 		formatString: "R$"\ #,0.###############;-"R$"\ #,0.###############;"R$"\ #,0.###############
 		lineageTag: f2ca7c43-623d-4c23-85ae-60f2c7107833
 
@@ -42,10 +42,10 @@ table _medidas
 
 	measure mediana_preco_variacao_% =
 			
-			VAR CurrentCodes =
+			VAR CurrentPrice =
 			    [mediana_preco]
 			
-			VAR PreviousCodes =
+			VAR PreviousPrice =
 			    SWITCH(
 			        TRUE(),
 			
@@ -73,13 +73,13 @@ table _medidas
 			
 			RETURN
 			    DIVIDE(
-			        CurrentCodes - PreviousCodes,
-			        PreviousCodes
+			        CurrentPrice - PreviousPrice,
+			        PreviousPrice
 			    )
 		formatString: 0.00%;-0.00%;0.00%
 		lineageTag: 26f5fe1e-b69a-46b8-b6f2-264d3620a136
 
-	measure mediana_preco = MEDIAN(fct_fipe_prices[valor_reais])
+	measure mediana_preco = DIVIDE(MEDIAN(fct_fipe_prices[valor_centavos]), 100)
 		formatString: "R$"\ #,0.###############;-"R$"\ #,0.###############;"R$"\ #,0.###############
 		lineageTag: 0a7feaf3-aecb-4602-aa8b-17d367b1cea3
 
@@ -213,7 +213,7 @@ table _medidas
 		formatString: "R$"#,0.00;-"R$"#,0.00;"R$"#,0.00
 		lineageTag: 9f306e1a-2e16-456e-9da0-7eacb7a69c64
 
-		annotation PBI_FormatHint = {"currencyCulture":"es-BR"}
+		annotation PBI_FormatHint = {"currencyCulture":"pt-BR"}
 
 	measure qtd_veiculos_periodo =
 			VAR ReferenceDateKey =
@@ -335,7 +335,7 @@ table _medidas
 			    MAX(dim_date[date_key])
 			RETURN
 			    CALCULATE(
-			        PERCENTILEX.INC(fct_fipe_prices, fct_fipe_prices[valor_reais], 0.25),
+			        DIVIDE(PERCENTILEX.INC(fct_fipe_prices, fct_fipe_prices[valor_centavos], 0.25), 100),
 			        REMOVEFILTERS(dim_date),
 			        dim_date[date_key] = ReferenceDateKey
 			    )
@@ -347,7 +347,7 @@ table _medidas
 			    MAX(dim_date[date_key])
 			RETURN
 			    CALCULATE(
-			        PERCENTILEX.INC(fct_fipe_prices, fct_fipe_prices[valor_reais], 0.75),
+			        DIVIDE(PERCENTILEX.INC(fct_fipe_prices, fct_fipe_prices[valor_centavos], 0.75), 100),
 			        REMOVEFILTERS(dim_date),
 			        dim_date[date_key] = ReferenceDateKey
 			    )
@@ -359,7 +359,7 @@ table _medidas
 			    MAX(dim_date[date_key])
 			RETURN
 			    CALCULATE(
-			        MIN(fct_fipe_prices[valor_reais]),
+			        DIVIDE(MIN(fct_fipe_prices[valor_centavos]), 100),
 			        REMOVEFILTERS(dim_date),
 			        dim_date[date_key] = ReferenceDateKey
 			    )
@@ -371,7 +371,7 @@ table _medidas
 			    MAX(dim_date[date_key])
 			RETURN
 			    CALCULATE(
-			        MAX(fct_fipe_prices[valor_reais]),
+			        DIVIDE(MAX(fct_fipe_prices[valor_centavos]), 100),
 			        REMOVEFILTERS(dim_date),
 			        dim_date[date_key] = ReferenceDateKey
 			    )
@@ -444,7 +444,7 @@ table _medidas
 		formatString: "R$"#,0.00;-"R$"#,0.00;"R$"#,0.00
 		lineageTag: 2bcaec2d-2817-4995-a570-d14f620a560d
 
-		annotation PBI_FormatHint = {"currencyCulture":"es-BR"}
+		annotation PBI_FormatHint = {"currencyCulture":"pt-BR"}
 
 	measure preco_q3 =
 			
